@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    //顏碼網頁:https://irozukan.net/japanese
+    <color name="color_blue">#A5DEE4</color>
+    <color name="color_green">#A8D8B9</color>
+    <color name="color_gray">#77969A</color>
+    <color name="color_rice">#FCFAF2</color>
+    <color name="color_white">#FFFFFB</color>
+</resources>

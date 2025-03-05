@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Taipei Underground Street Navigation</string>
+
+    <string name="navigation_drawer_open">open navigation drawer</string>
+    <string name="navigation_drawer_close">close navigation drawer</string>
+    <string name="taipei">台北地下街導航</string>
+
+</resources>
