@@ -1,4 +1,5 @@
 package com.example.cameraproject_2;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -26,6 +27,8 @@ public class MapActivity extends AppCompatActivity {
                 // AR 卡片被點擊後執行的操作
                 Toast.makeText(MapActivity.this, "AR 選項被點擊！", Toast.LENGTH_SHORT).show();
                 // 這裡可以加入跳轉到 AR 功能的 Intent
+                Intent intent = new Intent(MapActivity.this, ARNavigationActivity.class);
+                startActivity(intent); // 啟動新活動
             }
         });
 

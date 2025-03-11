@@ -244,7 +244,7 @@
                                     android:layout_below="@id/go"
                                     android:layout_centerHorizontal="true"
                                     android:layout_marginTop="10dp"
-                                    android:text="GO"
+                                    android:text="x"
                                     android:textColor="@color/color_gray"
                                     android:textSize="20sp"
                                     android:textStyle="bold" />
