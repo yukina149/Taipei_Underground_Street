@@ -1,6 +1,7 @@
 package com.example.cameraproject_2;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.sqlite.SQLiteDatabase;
@@ -13,13 +14,19 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 //import androidx.annotation.Nullable;
 import androidx.annotation.Nullable;
@@ -74,9 +81,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private File photoFile;
 
     private List<Mat> images = new ArrayList<>();
-    //private List<LocationData> locationDataList = new ArrayList<>();
+    private List<LocationData> locationDataList = new ArrayList<>();
     private ActivityResultLauncher<Intent> startOrbActivityLauncher;
-    //private DatabaseHelper dbHelper;
+    private DatabaseHelper dbHelper;
     private SQLiteDatabase database;
 
     private String currentLocation = "Unknown";
@@ -97,6 +104,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         // 顯示圖片
         bigmap = findViewById(R.id.bigmap);
+
+        // 初始化 Spinner
+        destinationSpinner = findViewById(R.id.destinationSpinner);
+
+        // 設置 Spinner 的數據和行為
+        setupDestinationSpinner();
+
+        // 初始化 currentLocationTextView
+        currentLocationTextView = findViewById(R.id.currentLocationTextView);
 
 
         // 初始化 OpenCV
@@ -147,12 +163,190 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Intent intent = new Intent(MainActivity.this, com.example.cameraproject_2.MapActivity.class);
             startActivity(intent);
         });
+
+
+        //調用orb location
+        // 初始化 ActivityResultLauncher
+        startOrbActivityLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                new ActivityResultCallback<ActivityResult>() {
+                    @Override
+                    public void onActivityResult(ActivityResult result) {
+                        if (result.getResultCode() == RESULT_OK) {
+                            Intent intent = result.getData();
+                            if (intent != null) {
+                                String location = intent.getStringExtra("location");
+                                if (location != null && !location.isEmpty()) {
+                                    // 更新目前顯示
+                                    currentLocationTextView.setText("Location: " + location);
+                                    Log.e("location", location);
+                                } else {
+                                    Toast.makeText(MainActivity.this, "位置信息为空", Toast.LENGTH_SHORT).show();
+                                }
+                            }
+                        } else {
+                            Toast.makeText(MainActivity.this, "Image capture/selection cancelled or failed", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+        );
+    }
+
+    //將拍照的照片顯示在ImageView
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // 檢查結果是否為成功
+        if (resultCode == RESULT_OK) {
+            // 處理拍照後的結果
+            if (requestCode == REQUEST_IMAGE_CAPTURE) {
+                try {
+                    // 從檔案中讀取完整的圖片
+                    Bitmap imageBitmap = BitmapFactory.decodeFile(photoFile.getAbsolutePath());
+
+                    // 將圖片顯示在 ImageView 中
+                    bigmap.setImageBitmap(imageBitmap);
+
+                    // 將圖片儲存到相冊（如果需要）
+                    saveImageToGallery(imageBitmap);
+                } catch (Exception e) {
+                    Log.e("Camera", "Error loading image: " + e.getMessage());
+                }
+            }
+            // 處理選擇圖片後的結果
+            else if (requestCode == REQUEST_IMAGE_PICK && data != null) {
+                Uri selectedImageUri = data.getData();
+                processSelectedImage(selectedImageUri);
+            }
+            // 處理 ORB 活動後的結果
+            else if (requestCode == REQUEST_ORB_ACTIVITY && data != null) {
+                String location = data.getStringExtra("location");
+                if (location != null && !location.isEmpty()) {
+                    // 更新目前位置
+                    currentLocationTextView.setText("Location: " + location);
+                    Log.e("location", location);
+                } else {
+                    Toast.makeText(this, "位置信息为空", Toast.LENGTH_SHORT).show();
+                }
+            }
+        } else {
+            // 如果操作取消或失敗，顯示提示訊息
+            Toast.makeText(this, "Image capture/selection cancelled or failed", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+
+    //下拉式選單
+    public class CustomSpinnerAdapter extends ArrayAdapter<String> {
+
+        public CustomSpinnerAdapter(Context context, int resource, List<String> objects) {
+            super(context, resource, objects);
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            View view = super.getView(position, convertView, parent);
+            if (position == 0) {
+                ((TextView) view).setText("請選擇目的地");
+            }
+            return view;
+        }
+
+    }
+    private void setupDestinationSpinner() {
+        List<String> locationNamesForDisplay = new ArrayList<>();
+        List<String> locationNamesForDropdown = new ArrayList<>();
+
+        for (LocationData location : locationDataList) {
+            locationNamesForDropdown.add(location.getLocationName());
+        }
+
+        if (locationNamesForDropdown.isEmpty()) {
+            locationNamesForDropdown.add("A棟");
+            locationNamesForDropdown.add("B棟");
+            locationNamesForDropdown.add("C棟");
+            locationNamesForDropdown.add("D棟");
+            locationNamesForDropdown.add("E棟");
+            locationNamesForDropdown.add("F棟");
+            locationNamesForDropdown.add("G棟");
+            locationNamesForDropdown.add("H棟");
+            locationNamesForDropdown.add("I棟");
+            locationNamesForDropdown.add("J棟");
+            locationNamesForDropdown.add("K棟");
+            locationNamesForDropdown.add("L棟");
+            locationNamesForDropdown.add("M棟");
+            locationNamesForDropdown.add("N棟");
+            locationNamesForDropdown.add("NB棟");
+            locationNamesForDropdown.add("排灣族");
+            locationNamesForDropdown.add("資源教室");
+        }
+
+        locationNamesForDisplay.add("請選擇目的地");
+        locationNamesForDisplay.addAll(locationNamesForDropdown);
+
+        CustomSpinnerAdapter adapter = new CustomSpinnerAdapter(
+                this, android.R.layout.simple_spinner_item, locationNamesForDisplay);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        destinationSpinner.setAdapter(adapter);
+        destinationSpinner.setSelection(0); // 默認第一個元素
+
+        destinationSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String selectedLocation = locationNamesForDisplay.get(position);
+                if (!selectedLocation.equals("請選擇目的地")) {
+                    // 顯示選擇的位置
+                    Toast.makeText(MainActivity.this, "您選擇了： " + selectedLocation, Toast.LENGTH_SHORT).show();
+                    selectedDestination = selectedLocation; // 更新 selectedDestination
+                } else {
+                    selectedDestination = ""; // 如果選則默認選項，則清空位置
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                selectedDestination = "";
+            }
+        });
     }
 
     //點擊事件
     private void setupClickListeners() {
         findViewById(R.id.cardCamera).setOnClickListener(v -> captureImage());
         findViewById(R.id.cardPicture).setOnClickListener(v -> openGallery());
+
+        //  找到 database 的 ImageView 並設定點擊事件
+        ImageView imageViewDatabase = findViewById(R.id.image_database);
+        if (imageViewDatabase != null) {
+            imageViewDatabase.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    // 啟動 DatabaseActivity
+                    Intent intent = new Intent(MainActivity.this, database.class);
+                    startActivity(intent);
+                }
+            });
+        } else {
+            Log.e("MainActivity", "image_view_database not found in layout");
+        }
+
+
+        //  找到 orb 的 ImageView 並設定點擊事件 (新增)
+        ImageView imageViewOrb = findViewById(R.id.image_orb);
+        if (imageViewOrb != null) {
+            imageViewOrb.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    // 啟動 ORBActivity
+                    Intent intent = new Intent(MainActivity.this, ORBActivity.class);
+                    startOrbActivityLauncher.launch(intent);
+                }
+            });
+        } else {
+            Log.e("MainActivity", "image_view_orb not found in layout");
+        }
     }
 
     //啟動相機應用程式來拍照
@@ -182,34 +376,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         intent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
         startActivityForResult(intent, REQUEST_IMAGE_CAPTURE);
-    }
-
-
-
-    //將拍照的照片顯示在ImageView
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            try {
-                // 從檔案中讀取完整的圖片
-                Bitmap imageBitmap = BitmapFactory.decodeFile(photoFile.getAbsolutePath());
-
-                // 將圖片顯示在 ImageView 中
-                bigmap.setImageBitmap(imageBitmap);
-
-                // 將圖片儲存到相冊（如果需要）
-                saveImageToGallery(imageBitmap);
-            } catch (Exception e) {
-                Log.e("Camera", "Error loading image: " + e.getMessage());
-            }
-        }
-        else if (requestCode == REQUEST_IMAGE_PICK && resultCode == RESULT_OK && data != null) {
-            Uri selectedImageUri = data.getData();
-            processSelectedImage(selectedImageUri);
-        }
     }
 
 
