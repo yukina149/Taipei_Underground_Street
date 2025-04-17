@@ -11,14 +11,21 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
+rootProject.name = "Taipei_Underground_Street"
+include ':app'
+include ':sdk'
+include ':UnityLibrary'
+include ':UnityLibrary:xrmanifest.androidlib'
+project(':UnityLibrary:xrmanifest.androidlib').projectDir = new File('UnityLibrary/xrmanifest.androidlib')
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+        flatDir {
+            dirs "${project(':UnityLibrary').projectDir}/libs"
+        }
     }
 }
-
-rootProject.name = "Taipei_Underground_Street"
-include ':app'
-include ':sdk'

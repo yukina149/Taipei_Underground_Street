@@ -18,11 +18,10 @@ import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
 
-
     private static final String TAG = "DatabaseHelper";
     private static final String DATABASE_NAME = "picture.db";
-    private static final int DATABASE_VERSION = 1;
-    private static final String DB_PATH = "/data/data/com.example.cameraproject_2/databases/";
+    private static final int DATABASE_VERSION = 1;//如果有更新資料庫要寫成2，確定改好後再改成1
+    private static final String DB_PATH = "/data/data/com.example.cameraproject_2/database/";
 
     private final Context context;
     private SQLiteDatabase database;
@@ -31,22 +30,33 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
         this.context = context;
     }
+    public File getDatabasePath() {
+        return new File(getWritableDatabase().getPath());
+    }
 
     public void createDataBase() throws IOException {
         boolean dbExists = checkDataBase();
 
         if (!dbExists) {
-            this.getReadableDatabase();
+            this.getReadableDatabase(); // 創建空資料庫
 
             try {
-                copyDataBase();
+                copyDataBase(); // 從 assets 複製資料庫
                 copyImages(); // 複製圖片檔案
                 Log.d(TAG, "Database created successfully");
             } catch (IOException e) {
                 throw new Error("Error copying database: " + e.getMessage());
             }
+        } else {
+            // 如果資料庫已經存在，試著刪除它然後重新創建
+            File dbFile = new File(DB_PATH + DATABASE_NAME);
+            if (dbFile.exists()) {
+                dbFile.delete();
+                createDataBase(); // 重新創建資料庫
+            }
         }
     }
+
 
     private boolean checkDataBase() {
         SQLiteDatabase checkDB = null;

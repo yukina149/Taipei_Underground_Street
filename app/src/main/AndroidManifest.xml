@@ -11,10 +11,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
-    <meta-data
-        android:name="com.google.ar.core"
-        android:value="required" />
-
     <uses-feature
         android:name="android.hardware.camera.ar"
         android:required="true" />
@@ -28,7 +24,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CameraProject_2"
+        tools:replace="android:icon,android:theme"
         tools:targetApi="31">
+        <activity
+            android:name=".UnityHanderActivity"
+            android:exported="false" />
         <activity
             android:name=".ARNavigationActivity"
             android:exported="false" />
@@ -43,7 +43,6 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

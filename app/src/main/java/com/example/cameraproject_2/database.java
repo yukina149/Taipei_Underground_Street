@@ -32,6 +32,12 @@ public class database extends AppCompatActivity {
 
     private DatabaseHelper dbHelper;
 
+    private static final String TABLE_NAME = "picture_data";
+    private static final String COLUMN_NAME = "name";
+    private static final String COLUMN_IMAGE = "image";
+    private static final String COLUMN_FILE_EXTENSION = "file_extension";
+    private static final String COLUMN_DESCRIPTION = "description";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -130,68 +136,27 @@ public class database extends AppCompatActivity {
             imagesContainer.removeAllViews(); // Clear existing views
             int lastViewId = View.NO_ID;
 
-            String[] columns = {"name", "image", "file_extension", "description"};
-            cursor = db.query("picture_data", columns, null, null, null, null, null);
+            String[] columns = {COLUMN_NAME, COLUMN_IMAGE, COLUMN_FILE_EXTENSION, COLUMN_DESCRIPTION};
+            cursor = db.query(TABLE_NAME, columns, null, null, null, null, null);
 
             if (cursor != null && cursor.moveToFirst()) {
                 do {
-                    String imageName = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                    String description = cursor.getString(cursor.getColumnIndexOrThrow("description"));
-                    String imageFileName = cursor.getString(cursor.getColumnIndexOrThrow("image"));
-                    String fileExtension = cursor.getString(cursor.getColumnIndexOrThrow("file_extension"));
+                    String imageName = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NAME));
+                    String description = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DESCRIPTION));
+                    String imageFileName = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_IMAGE));
+                    String fileExtension = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_FILE_EXTENSION));
 
-                    String fullImageFileName = imageFileName  + fileExtension;
-
+                    String fullImageFileName = imageFileName + fileExtension;
                     String imagePath = getImagePathFromName(fullImageFileName);
                     Log.d("ImageDisplay", "Image path: " + imagePath);
 
-                    //圖片
-                    ImageView imageView = new ImageView(this);
-                    imageView.setId(View.generateViewId());
-                    imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                    ConstraintLayout.LayoutParams imageParams = new ConstraintLayout.LayoutParams(
-                            ConstraintLayout.LayoutParams.MATCH_PARENT,
-                            ConstraintLayout.LayoutParams.WRAP_CONTENT
-                    );
-                    imageView.setLayoutParams(imageParams);
-
-                    File imageFile = new File(imagePath);
-                    if (imageFile.exists()) {
-                        Glide.with(this)
-                                .load(imageFile)
-                                .into(imageView);
-                    } else {
-                        Log.e("ImageDisplay", "Image file not found: " + imagePath);
-                        imageView.setImageResource(R.drawable.ic_launcher_background);
-                    }
-
-                    TextView textView = new TextView(this);
-                    textView.setId(View.generateViewId());
-                    textView.setText(description);
-                    textView.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
-                    ConstraintLayout.LayoutParams textParams = new ConstraintLayout.LayoutParams(
-                            ConstraintLayout.LayoutParams.MATCH_PARENT,
-                            ConstraintLayout.LayoutParams.WRAP_CONTENT
-                    );
-                    textView.setLayoutParams(textParams);
+                    ImageView imageView = createImageView(imagePath);
+                    TextView textView = createTextView(description);
 
                     imagesContainer.addView(imageView);
                     imagesContainer.addView(textView);
 
-                    ConstraintSet set = new ConstraintSet();
-                    set.clone(imagesContainer);
-
-                    set.connect(imageView.getId(), ConstraintSet.TOP,
-                            (lastViewId == View.NO_ID) ? ConstraintSet.PARENT_ID : lastViewId,
-                            (lastViewId == View.NO_ID) ? ConstraintSet.TOP : ConstraintSet.BOTTOM, 0);
-                    set.connect(imageView.getId(), ConstraintSet.LEFT, ConstraintSet.PARENT_ID, ConstraintSet.LEFT, 0);
-                    set.connect(imageView.getId(), ConstraintSet.RIGHT, ConstraintSet.PARENT_ID, ConstraintSet.RIGHT, 0);
-
-                    set.connect(textView.getId(), ConstraintSet.TOP, imageView.getId(), ConstraintSet.BOTTOM, 0);
-                    set.connect(textView.getId(), ConstraintSet.LEFT, ConstraintSet.PARENT_ID, ConstraintSet.LEFT, 0);
-                    set.connect(textView.getId(), ConstraintSet.RIGHT, ConstraintSet.PARENT_ID, ConstraintSet.RIGHT, 0);
-
-                    set.applyTo(imagesContainer);
+                    applyConstraints(imagesContainer, imageView, textView, lastViewId);
                     lastViewId = textView.getId();
 
                 } while (cursor.moveToNext());
@@ -206,6 +171,58 @@ public class database extends AppCompatActivity {
                 cursor.close();
             }
         }
+    }
+
+    private ImageView createImageView(String imagePath) {
+        ImageView imageView = new ImageView(this);
+        imageView.setId(View.generateViewId());
+        imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        ConstraintLayout.LayoutParams imageParams = new ConstraintLayout.LayoutParams(
+                ConstraintLayout.LayoutParams.MATCH_PARENT,
+                ConstraintLayout.LayoutParams.WRAP_CONTENT
+        );
+        imageView.setLayoutParams(imageParams);
+
+        File imageFile = new File(imagePath);
+        if (imageFile.exists()) {
+            Glide.with(this).load(imageFile).into(imageView);
+        } else {
+            Log.e("ImageDisplay", "Image file not found: " + imagePath);
+            imageView.setImageResource(R.drawable.ic_launcher_background);
+        }
+
+        return imageView;
+    }
+
+    private TextView createTextView(String description) {
+        TextView textView = new TextView(this);
+        textView.setId(View.generateViewId());
+        textView.setText(description);
+        textView.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        ConstraintLayout.LayoutParams textParams = new ConstraintLayout.LayoutParams(
+                ConstraintLayout.LayoutParams.MATCH_PARENT,
+                ConstraintLayout.LayoutParams.WRAP_CONTENT
+        );
+        textView.setLayoutParams(textParams);
+
+        return textView;
+    }
+
+    private void applyConstraints(ConstraintLayout container, ImageView imageView, TextView textView, int lastViewId) {
+        ConstraintSet set = new ConstraintSet();
+        set.clone(container);
+
+        set.connect(imageView.getId(), ConstraintSet.TOP,
+                (lastViewId == View.NO_ID) ? ConstraintSet.PARENT_ID : lastViewId,
+                (lastViewId == View.NO_ID) ? ConstraintSet.TOP : ConstraintSet.BOTTOM, 0);
+        set.connect(imageView.getId(), ConstraintSet.LEFT, ConstraintSet.PARENT_ID, ConstraintSet.LEFT, 0);
+        set.connect(imageView.getId(), ConstraintSet.RIGHT, ConstraintSet.PARENT_ID, ConstraintSet.RIGHT, 0);
+
+        set.connect(textView.getId(), ConstraintSet.TOP, imageView.getId(), ConstraintSet.BOTTOM, 0);
+        set.connect(textView.getId(), ConstraintSet.LEFT, ConstraintSet.PARENT_ID, ConstraintSet.LEFT, 0);
+        set.connect(textView.getId(), ConstraintSet.RIGHT, ConstraintSet.PARENT_ID, ConstraintSet.RIGHT, 0);
+
+        set.applyTo(container);
     }
 
     private String getImagePathFromName(String imageName) {

@@ -161,6 +161,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 設置 Map 按鈕點擊事件
         cardMap.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, com.example.cameraproject_2.MapActivity.class);
+            intent.putExtra("destination", selectedDestination); // 傳遞選擇的目的地
+            Log.d("MainActivity", "Sending destination to MapActivity: " + selectedDestination);
             startActivity(intent);
         });
 

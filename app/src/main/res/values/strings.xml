@@ -5,4 +5,6 @@
     <string name="navigation_drawer_close">close navigation drawer</string>
     <string name="taipei">台北地下街導航</string>
 
+    <string name="game_view_content_description">Game view</string><!--unity需要-->
+
 </resources>

@@ -196,13 +196,13 @@ public class ORBActivity extends AppCompatActivity {
             if (numMatches > maxMatches) {
                 maxMatches = numMatches;
                 bestMatchLocation = locationData.getLocationName();
-                bestMatchImage = databaseImage.clone(); // 儲存最佳匹配的影像
-                bestMatchKeyPoints = keypoints2; // 儲存最佳匹配的關鍵點
-                bestMatchImageFileName = imageFileName; // 儲存最佳匹配的圖片檔案名稱
+                bestMatchImage = databaseImage.clone();
+                bestMatchKeyPoints = keypoints2;
+                bestMatchImageFileName = imageFileName;
             }
         }
 
-        // 載入最佳匹配圖片並顯示
+
         if (bestMatchImageFileName != null) {
             Bitmap bestMatchBitmap = getBitmapFromAsset(bestMatchImageFileName);
             if (bestMatchBitmap != null) {
@@ -212,21 +212,21 @@ public class ORBActivity extends AppCompatActivity {
             }
         }
         else {
-            // 如果找不到最佳匹配的圖片，則設定預設圖片或清除 ImageView
+
             databaseImageView.setImageResource(android.R.drawable.ic_menu_gallery); // 使用預設圖片
         }
 
-        // 在上傳的圖片上繪製關鍵點
+
         Mat outputImage = new Mat();
         Imgproc.cvtColor(uploadedImage, outputImage, Imgproc.COLOR_GRAY2BGR);
         org.opencv.core.KeyPoint[] keyPoints = keypoints1.toArray();
         for (org.opencv.core.KeyPoint keyPoint : keyPoints) {
             Point pt = new Point(keyPoint.pt.x, keyPoint.pt.y);
             Scalar color = new Scalar(0, 255, 0); // 綠色
-            Imgproc.circle(outputImage, pt, 5, color, 2);// 在关键点位置绘制圆圈标记
+            Imgproc.circle(outputImage, pt, 5, color, 2);
         }
 
-        // 如果有最佳匹配，則在最佳匹配圖像上繪製關鍵點
+
         if (bestMatchImage != null) {
             Mat bestMatchOutputImage = new Mat();
             Imgproc.cvtColor(bestMatchImage, bestMatchOutputImage, Imgproc.COLOR_GRAY2BGR);
