@@ -2,8 +2,9 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="red">#FF0000</color>
 
-    //顏碼網頁:https://irozukan.net/japanese
+    <!--顏碼網頁:https://irozukan.net/japanese-->
     <color name="color_blue">#A5DEE4</color>
     <color name="color_green">#A8D8B9</color>
     <color name="color_gray">#77969A</color>

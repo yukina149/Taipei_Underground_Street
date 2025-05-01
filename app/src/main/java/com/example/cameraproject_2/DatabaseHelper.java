@@ -266,4 +266,3 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         // 當數據庫版本升級時會執行
     }
 }
-

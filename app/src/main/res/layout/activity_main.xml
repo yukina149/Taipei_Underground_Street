@@ -85,9 +85,9 @@
 
                     <Spinner
                         android:id="@+id/destinationSpinner"
-                        android:layout_width="237dp"
-                        android:layout_height="36dp"
-                        android:layout_marginTop="8dp"
+                        android:layout_width="224dp"
+                        android:layout_height="34dp"
+                        android:layout_marginTop="4dp"
                         android:minWidth="48dp"
                         android:minHeight="48dp"
                         android:spinnerMode="dropdown"
@@ -95,6 +95,26 @@
                         app:layout_constraintHorizontal_bias="0.0"
                         app:layout_constraintStart_toEndOf="@+id/textview10"
                         app:layout_constraintTop_toBottomOf="@id/currentLocationTextView" />
+
+                    <!-- 新增的按鈕：確認位置正確 -->
+                    <Button
+                        android:id="@+id/buttonCorrectLocation"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="這是正確的位置"
+                        android:enabled="false"
+                        app:layout_constraintTop_toBottomOf="@+id/destinationSpinner"/> <!-- 初始禁用，需選擇目的地後啟用 -->
+
+                    <!-- 新增的按鈕：位置不正確 -->
+                    <Button
+                        android:id="@+id/buttonIncorrectLocation"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="位置不正確"
+                        android:enabled="false"
+                        app:layout_constraintTop_toBottomOf="@+id/buttonCorrectLocation"/> <!-- 初始禁用，需選擇目的地後啟用 -->
 
                     <LinearLayout
                         android:id="@+id/L1"
@@ -107,7 +127,7 @@
                         android:padding="10dp"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@+id/destinationSpinner">
+                        app:layout_constraintTop_toBottomOf="@+id/buttonIncorrectLocation">
 
                         <androidx.cardview.widget.CardView
                             android:id="@+id/cardPicture"

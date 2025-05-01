@@ -4,6 +4,11 @@
     <string name="navigation_drawer_open">open navigation drawer</string>
     <string name="navigation_drawer_close">close navigation drawer</string>
     <string name="taipei">台北地下街導航</string>
+    <string name="uploaded_image_desc">上傳的圖片</string>
+    <string name="database_image_desc">資料庫匹配的圖片</string>
+    <string name="location_unknown">Location: Unknown</string>
+    <string name="upload_image">上傳圖片</string>
+
 
     <string name="game_view_content_description">Game view</string><!--unity需要-->
 

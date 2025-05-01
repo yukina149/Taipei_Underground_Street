@@ -14,7 +14,7 @@
 .cxx
 local.properties
 
-#unity library
+#unity library 
 unityLibrary/**
 !unityLibrary/build.gradle
 !unityLibrary/src/main/AndroidManifest.xml

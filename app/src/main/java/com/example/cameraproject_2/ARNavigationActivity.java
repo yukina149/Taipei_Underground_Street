@@ -516,7 +516,7 @@ public class ARNavigationActivity extends AppCompatActivity{
         }
     }
 
-     private void openAppSettings() {
+    private void openAppSettings() {
         Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
         Uri uri = Uri.fromParts("package", getPackageName(), null);
         intent.setData(uri);
