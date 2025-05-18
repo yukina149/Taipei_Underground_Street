@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="創建帳號"
+        android:textSize="24sp"
+        android:layout_marginBottom="20dp"/>
+
+    <EditText
+        android:id="@+id/editTextNewUsername"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="輸入使用者帳號名稱"
+        android:inputType="text"
+        android:layout_marginBottom="10dp"/>
+
+    <EditText
+        android:id="@+id/editTextEmail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="輸入信箱"
+        android:inputType="textEmailAddress"
+        android:layout_marginBottom="10dp"/>
+
+    <EditText
+        android:id="@+id/editTextNewPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="輸入密碼"
+        android:inputType="textPassword"
+        android:layout_marginBottom="10dp"/>
+
+    <EditText
+        android:id="@+id/editTextConfirmPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="再次確認密碼"
+        android:inputType="textPassword"
+        android:layout_marginBottom="20dp"/>
+
+    <Button
+        android:id="@+id/buttonConfirmRegister"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="確認註冊"
+        android:layout_gravity="center"/>
+
+</LinearLayout>

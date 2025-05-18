@@ -189,8 +189,8 @@ public class ARNavigationActivity extends AppCompatActivity{
         setupCameraParameters();
 
         try {
-            dbHelper.createDataBase();
-            database = dbHelper.openDataBase();
+            dbHelper.createDataBase("picture.db");
+            database = dbHelper.getPictureDatabase();
             loadLocationDataFromDatabase();
         } catch (IOException e) {
             Log.e("ARNavigationActivity", "Error creating database: " + e.getMessage());
@@ -840,7 +840,7 @@ public class ARNavigationActivity extends AppCompatActivity{
 
     private void loadLocationDataFromDatabase() {
         locationDataList.clear(); // 清空現有數據，確保只使用資料庫數據
-        SQLiteDatabase db = dbHelper.openDataBase();
+        SQLiteDatabase db = dbHelper.getPictureDatabase();
         Cursor cursor = null;
         try {
             cursor = db.query("picture_data", new String[]{"location_data", "image"}, null, null, null, null, null);

@@ -21,8 +21,6 @@ import org.opencv.core.DMatch;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDMatch;
 import org.opencv.core.MatOfKeyPoint;
-import org.opencv.core.Point;
-import org.opencv.core.Scalar;
 import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.ORB;
 import org.opencv.imgproc.Imgproc;
@@ -31,6 +29,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class ORBActivity extends AppCompatActivity {
@@ -42,6 +41,7 @@ public class ORBActivity extends AppCompatActivity {
     private SQLiteDatabase database;
     private List<LocationData> locationDataList;
     private ImageView databaseImageView;
+    private ArrayList<MatchResult> matchResults = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,12 +64,12 @@ public class ORBActivity extends AppCompatActivity {
 
         dbHelper = new DatabaseHelper(this);
         try {
-            dbHelper.createDataBase();
+            dbHelper.createDataBase("picture.db");
         } catch (IOException e) {
             Log.e("ORBActivity", "Error creating database: " + e.getMessage());
         }
 
-        database = dbHelper.openDataBase();
+        database = dbHelper.openDataBase("picture.db");
         locationDataList = new ArrayList<>();
         loadLocationDataFromDatabase();
 
@@ -96,12 +96,20 @@ public class ORBActivity extends AppCompatActivity {
             Utils.bitmapToMat(bitmap, uploadedImageMat);
             Imgproc.cvtColor(uploadedImageMat, uploadedImageMat, Imgproc.COLOR_BGR2GRAY);
 
-            String location = compareImageWithDatabase(uploadedImageMat);
-            locationTextView.setText("Location: " + location);
-
-            Intent intent = new Intent();
-            intent.putExtra("location", location);
-            setResult(RESULT_OK, intent);
+            ArrayList<MatchResult> topMatches = compareImageWithDatabase(uploadedImageMat, imageUri);
+            Intent resultIntent = new Intent();
+            if (!topMatches.isEmpty()) {
+                String bestLocation = topMatches.get(0).getLocation();
+                locationTextView.setText("Location: " + bestLocation);
+                resultIntent.putExtra("location", bestLocation); // 設置最佳位置
+                resultIntent.putParcelableArrayListExtra("topMatches", new ArrayList<>(topMatches));
+                setResult(RESULT_OK, resultIntent);
+            } else {
+                locationTextView.setText("Location: Unknown");
+                resultIntent.putExtra("location", "Unknown");
+                resultIntent.putParcelableArrayListExtra("topMatches", new ArrayList<>());
+                setResult(RESULT_OK, resultIntent);
+            }
             finish();
 
             inputStream.close();
@@ -112,19 +120,13 @@ public class ORBActivity extends AppCompatActivity {
         }
     }
 
-    private String compareImageWithDatabase(Mat uploadedImage) {
+    private ArrayList<MatchResult> compareImageWithDatabase(Mat uploadedImage, Uri imageUri) {
         ORB orb = ORB.create();
         MatOfKeyPoint keypoints1 = new MatOfKeyPoint();
         Mat descriptors1 = new Mat();
         orb.detectAndCompute(uploadedImage, new Mat(), keypoints1, descriptors1);
 
-        String bestMatchLocation = "Unknown";
-        int maxMatches = 0;
-        Mat bestMatchImage = null;
-        MatOfKeyPoint bestMatchKeyPoints = null;
-        String bestMatchImageFileName = null;
-        Bitmap bestMatchBitmap = null;
-
+        matchResults.clear(); // 清空之前的匹配結果
         Log.d("ORBActivity", "Uploaded image keypoints: " + keypoints1.toArray().length);
 
         for (LocationData locationData : locationDataList) {
@@ -176,59 +178,28 @@ public class ORBActivity extends AppCompatActivity {
             int numMatches = goodMatches.size();
             Log.d("ORBActivity", "Matches for " + imageFileName + ": " + numMatches);
 
-            if (numMatches > maxMatches && numMatches >= 10) {
-                maxMatches = numMatches;
-                bestMatchLocation = locationData.getLocationName();
-                bestMatchImage = databaseImage.clone();
-                bestMatchKeyPoints = keypoints2;
-                bestMatchImageFileName = imageFileName;
-                Log.d("ORBActivity", "New best match: " + bestMatchLocation + ", matches: " + maxMatches);
+            // 降低門檻，允許更多匹配進入結果
+            if (numMatches >= 5) {
+                // 構建 assets 文件的 URI（模擬路徑）
+                String imageUriString = "file://assets/images/" + imageFileName;
+                matchResults.add(new MatchResult(imageUriString, locationData.getLocationName(), numMatches));
+                Log.d("ORBActivity", "Added match: " + locationData.getLocationName() + ", matches: " + numMatches + ", uri: " + imageUriString);
             }
 
             databaseImage.release();
             matches.release();
         }
 
-        Log.d("ORBActivity", "Final best match location: " + bestMatchLocation + ", matches: " + maxMatches);
+        // 按匹配數降序排序
+        Collections.sort(matchResults, (a, b) -> b.getMatches() - a.getMatches());
 
-        if (bestMatchImageFileName != null) {
-            bestMatchBitmap = getBitmapFromAsset(bestMatchImageFileName);
-            if (bestMatchBitmap != null) {
-                databaseImageView.setImageBitmap(bestMatchBitmap);
-            } else {
-                Log.e("ORBActivity", "無法從assets加載最佳匹配圖像：" + bestMatchImageFileName);
-            }
-        } else {
-            databaseImageView.setImageResource(android.R.drawable.ic_menu_gallery);
-        }
+        // 動態計算顯示筆數：總數的 1/3（四捨五入）
+        int totalMatches = matchResults.size();
+        int displayCount = Math.max(1, (int) Math.round(totalMatches / 3.0)); // 至少顯示 1 筆
+        displayCount = Math.min(displayCount, matchResults.size()); // 不超過總數
+        Log.d("ORBActivity", "Total matches: " + totalMatches + ", Display count: " + displayCount);
 
-        Mat outputImage = new Mat();
-        Imgproc.cvtColor(uploadedImage, outputImage, Imgproc.COLOR_GRAY2BGR);
-        org.opencv.core.KeyPoint[] keyPoints = keypoints1.toArray();
-        for (org.opencv.core.KeyPoint keyPoint : keyPoints) {
-            Point pt = new Point(keyPoint.pt.x, keyPoint.pt.y);
-            Scalar color = new Scalar(0, 255, 0);
-            Imgproc.circle(outputImage, pt, 5, color, 2);
-        }
-
-        if (bestMatchImage != null) {
-            Mat bestMatchOutputImage = new Mat();
-            Imgproc.cvtColor(bestMatchImage, bestMatchOutputImage, Imgproc.COLOR_GRAY2BGR);
-            if (bestMatchKeyPoints != null) {
-                org.opencv.core.KeyPoint[] bestMatchKeyPointsArray = bestMatchKeyPoints.toArray();
-                for (org.opencv.core.KeyPoint keyPoint : bestMatchKeyPointsArray) {
-                    Point pt = new Point(keyPoint.pt.x, keyPoint.pt.y);
-                    Scalar color = new Scalar(255, 0, 0);
-                    Imgproc.circle(bestMatchOutputImage, pt, 5, color, 2);
-                }
-            }
-        }
-
-        Bitmap outputBitmap = Bitmap.createBitmap(outputImage.cols(), outputImage.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(outputImage, outputBitmap);
-        uploadedImageView.setImageBitmap(outputBitmap);
-
-        return bestMatchLocation;
+        return new ArrayList<>(matchResults.subList(0, displayCount));
     }
 
     private String getImageFileName(int imageId) {
@@ -262,7 +233,7 @@ public class ORBActivity extends AppCompatActivity {
     }
 
     private void loadLocationDataFromDatabase() {
-        SQLiteDatabase db = dbHelper.openDataBase();
+        SQLiteDatabase db = dbHelper.openDataBase("picture.db");
         Cursor cursor = null;
         try {
             cursor = db.query(
@@ -291,6 +262,7 @@ public class ORBActivity extends AppCompatActivity {
                 cursor.close();
             }
         }
+        Log.d("ORBActivity", "Total locations loaded: " + locationDataList.size());
     }
 
     private Bitmap getBitmapFromAsset(String fileName) {
@@ -321,30 +293,6 @@ public class ORBActivity extends AppCompatActivity {
         }
         if (dbHelper != null) {
             dbHelper.close();
-        }
-    }
-
-    private static class LocationData {
-        private String locationName;
-        private String imageData;
-        private String imageFileName;
-
-        public LocationData(String locationName, String imageData, String imageFileName) {
-            this.locationName = locationName;
-            this.imageData = imageData;
-            this.imageFileName = imageFileName;
-        }
-
-        public String getLocationName() {
-            return locationName;
-        }
-
-        public String getImageData() {
-            return imageData;
-        }
-
-        public String getImageFileName() {
-            return imageFileName;
         }
     }
 }

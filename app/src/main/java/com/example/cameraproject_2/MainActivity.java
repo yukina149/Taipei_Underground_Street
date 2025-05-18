@@ -3,6 +3,7 @@ package com.example.cameraproject_2;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
@@ -14,6 +15,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,7 +26,6 @@ import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
@@ -32,21 +33,17 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
-
 import com.google.android.material.navigation.NavigationView;
 import com.unity3d.player.UnityPlayerActivity;
-
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -54,10 +51,12 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
-public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+public class MainActivity extends BaseActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     static {
         System.loadLibrary("opencv_java4");
@@ -66,6 +65,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private static final int REQUEST_CAMERA_PERMISSION_CODE = 1;
     private static final int REQUEST_IMAGE_CAPTURE = 2;
     private static final int REQUEST_IMAGE_PICK = 3;
+    private static final int REQUEST_LOCATION_CONFIRM = 1001;
 
     private static final String KEY_PHOTO_URI = "photoUri";
     private static final String KEY_PHOTO_FILE_PATH = "photoFilePath";
@@ -82,12 +82,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     CardView cardMap;
     CardView cardGo;
 
-    private DrawerLayout drawerLayout;
-    private NavigationView navigationView;
-
     private List<Mat> images = new ArrayList<>();
     private List<LocationData> locationDataList = new ArrayList<>();
-    private ActivityResultLauncher<Intent> startOrbActivityLauncher;
+    private ArrayList<MatchResult> topMatches = new ArrayList<>();
+    private ActivityResultLauncher<Intent> activityResultLauncher;
     private ActivityResultLauncher<Intent> takePictureLauncher;
     private ActivityResultLauncher<Intent> pickImageLauncher;
     private DatabaseHelper dbHelper;
@@ -105,6 +103,41 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
+
+        // 初始化 SharedPreferences，與 BaseActivity 保持一致
+        sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+
+        // 初始化 drawerLayout 和 navigationView
+        drawerLayout = findViewById(R.id.drawer_layout);
+        navigationView = findViewById(R.id.nav_view);
+
+        if (drawerLayout == null || navigationView == null) {
+            Toast.makeText(this, "Navigation setup failed", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        // 設置 Toggle 按鈕
+        ImageView menuIcon = findViewById(R.id.menuIcon);
+        menuIcon.setOnClickListener(v -> drawerLayout.openDrawer(GravityCompat.START));
+
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawerLayout, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+        drawerLayout.addDrawerListener(toggle);
+        toggle.syncState();
+
+        navigationView.bringToFront();
+        navigationView.setNavigationItemSelectedListener(this);
+
+        // 動態更新導航選單
+        updateNavigationMenu();
+
+        // 更新 header
+        updateHeader();
+
+        // 其他初始化代碼...
+        bigmap = findViewById(R.id.bigmap);
+        bigmap.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
         if (savedInstanceState != null) {
             String photoUriString = savedInstanceState.getString(KEY_PHOTO_URI);
@@ -132,21 +165,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }
 
-        bigmap = findViewById(R.id.bigmap);
-        bigmap.setScaleType(ImageView.ScaleType.FIT_CENTER);
-
         if (currentBitmap != null) {
             bigmap.setImageBitmap(currentBitmap);
             Log.d("MainActivity", "Restored image to bigmap");
-            updateButtonState(); // 恢復後檢查按鈕狀態
         }
 
         destinationSpinner = findViewById(R.id.destinationSpinner);
-
         buttonCorrectLocation = findViewById(R.id.buttonCorrectLocation);
         buttonIncorrectLocation = findViewById(R.id.buttonIncorrectLocation);
 
-        // 設置按鈕點擊事件
+        buttonCorrectLocation.setEnabled(false);
+        buttonIncorrectLocation.setEnabled(false);
+
         buttonCorrectLocation.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, UnityPlayerActivity.class);
             startActivity(intent);
@@ -154,14 +184,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         });
 
         buttonIncorrectLocation.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, WhereLocation.class); // 修正類名為 WhereLocationActivity
-            startActivity(intent);
+            Intent intent = new Intent(MainActivity.this, WhereLocation.class);
+            if (topMatches.isEmpty()) {
+                Toast.makeText(this, "請先拍攝或選擇圖片以獲取匹配結果", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            intent.putParcelableArrayListExtra("topMatches", topMatches);
+            activityResultLauncher.launch(intent);
             Log.d("MainActivity", "Launching WhereLocationActivity");
         });
-
-        // 初始禁用按鈕
-        buttonCorrectLocation.setEnabled(false);
-        buttonIncorrectLocation.setEnabled(false);
 
         setupDestinationSpinner();
 
@@ -179,20 +210,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         cardCamera = findViewById(R.id.cardCamera);
         cardMap = findViewById(R.id.cardMap);
         cardGo = findViewById(R.id.cardGo);
-        ImageView menuIcon = findViewById(R.id.menuIcon);
-
-        drawerLayout = findViewById(R.id.drawer_layout);
-        navigationView = findViewById(R.id.nav_view);
-
-        menuIcon.setOnClickListener(v -> drawerLayout.openDrawer(GravityCompat.START));
-
-        navigationView.bringToFront();
-        navigationView.setNavigationItemSelectedListener(this);
-
-        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
-                this, drawerLayout, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
-        drawerLayout.addDrawerListener(toggle);
-        toggle.syncState();
 
         cardMap.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, com.example.cameraproject_2.MapActivity.class);
@@ -201,7 +218,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             startActivity(intent);
         });
 
-        startOrbActivityLauncher = registerForActivityResult(
+        activityResultLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 new ActivityResultCallback<ActivityResult>() {
                     @Override
@@ -209,22 +226,56 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         if (result.getResultCode() == RESULT_OK) {
                             Intent intent = result.getData();
                             if (intent != null) {
-                                String location = intent.getStringExtra("location");
-                                if (location != null && !location.isEmpty()) {
-                                    currentLocation = location;
-                                    currentLocationTextView.setText("Location: " + location);
-                                    Log.d("MainActivity", "Received location: " + location);
-                                    updateButtonState(); // 收到 location 後更新按鈕狀態
+                                String locationFromORB = intent.getStringExtra("location");
+                                if (locationFromORB != null && !locationFromORB.isEmpty()) {
+                                    currentLocation = locationFromORB;
+                                    currentLocationTextView.setText("Location: " + locationFromORB);
+                                    Log.d("MainActivity", "Received location from ORBActivity: " + locationFromORB);
+
+                                    ArrayList<MatchResult> matches = intent.getParcelableArrayListExtra("topMatches");
+                                    if (matches != null && !matches.isEmpty()) {
+                                        topMatches.clear();
+                                        topMatches.addAll(matches);
+                                        Log.d("MainActivity", "Received topMatches from ORBActivity, size: " + topMatches.size());
+                                    }
+
+                                    if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
+                                        buttonCorrectLocation.setEnabled(true);
+                                        buttonIncorrectLocation.setEnabled(true);
+                                        Log.d("MainActivity", "Buttons enabled due to valid location: " + currentLocation);
+                                    } else {
+                                        buttonCorrectLocation.setEnabled(false);
+                                        buttonIncorrectLocation.setEnabled(false);
+                                        Log.d("MainActivity", "Buttons disabled due to invalid location: " + currentLocation);
+                                    }
+                                    return;
+                                }
+
+                                String selectedLocation = intent.getStringExtra("selectedLocation");
+                                if (selectedLocation != null && !selectedLocation.isEmpty()) {
+                                    currentLocation = selectedLocation;
+                                    currentLocationTextView.setText("Location: " + selectedLocation);
+                                    Log.d("MainActivity", "Received location from WhereLocationActivity: " + selectedLocation);
+                                    Toast.makeText(MainActivity.this, "位置已更新為：" + selectedLocation, Toast.LENGTH_SHORT).show();
+
+                                    if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
+                                        buttonCorrectLocation.setEnabled(true);
+                                        buttonIncorrectLocation.setEnabled(true);
+                                        Log.d("MainActivity", "Buttons enabled due to valid location: " + currentLocation);
+                                    } else {
+                                        buttonCorrectLocation.setEnabled(false);
+                                        buttonIncorrectLocation.setEnabled(false);
+                                        Log.d("MainActivity", "Buttons disabled due to invalid location: " + currentLocation);
+                                    }
                                 } else {
-                                    Toast.makeText(MainActivity.this, "位置信息為空", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(MainActivity.this, "未選擇位置", Toast.LENGTH_SHORT).show();
                                 }
                             }
                         } else {
-                            Toast.makeText(MainActivity.this, "Image processing cancelled or failed", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "操作取消或失敗", Toast.LENGTH_SHORT).show();
                         }
                     }
-                }
-        );
+                });
 
         takePictureLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -246,8 +297,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         Log.d("MainActivity", "Take picture canceled or failed, resultCode: " + result.getResultCode());
                         Toast.makeText(this, "拍照取消或失敗", Toast.LENGTH_SHORT).show();
                     }
-                }
-        );
+                });
 
         pickImageLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -265,24 +315,116 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         Log.d("MainActivity", "Image selection canceled or failed, resultCode: " + result.getResultCode());
                         Toast.makeText(this, "圖片選擇取消或失敗", Toast.LENGTH_SHORT).show();
                     }
-                }
-        );
+                });
 
         setupClickListeners();
 
-        NavigationView navigationView = findViewById(R.id.nav_view);
         View headerView = navigationView.getHeaderView(0);
         if (headerView == null) {
             headerView = navigationView.inflateHeaderView(R.layout.activity_menu_header);
         }
     }
 
-    // 新增方法：檢查並更新按鈕狀態
-    private void updateButtonState() {
-        boolean shouldEnableButtons = currentBitmap != null && !currentLocation.equals("Unknown");
-        buttonCorrectLocation.setEnabled(shouldEnableButtons);
-        buttonIncorrectLocation.setEnabled(shouldEnableButtons);
-        Log.d("MainActivity", "Button state updated: enabled=" + shouldEnableButtons);
+    @Override
+    protected void updateNavigationMenu() {
+        if (navigationView == null) {
+            Log.e("MainActivity", "navigationView is null");
+            return;
+        }
+
+        Menu navMenu = navigationView.getMenu();
+        navMenu.clear();
+
+        // 使用 main_menu.xml 替代 nav_menu.xml
+        getMenuInflater().inflate(R.menu.menu_main, navMenu);
+
+        // 動態添加群組選項（保持與 BaseActivity 一致的邏輯）
+        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+        int order = 100;
+        for (String groupName : groupNames) {
+            navMenu.add(Menu.NONE, Menu.NONE, order++, groupName)
+                    .setIcon(R.drawable.store_icon);
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu); // 保留 menu_main 作為頂部選單（如果需要）
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.personal_account) {
+            Intent intent = new Intent(this, PersonalAccount.class);
+            startActivity(intent);
+        } else if (id == R.id.Chat_room) {
+            boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
+            if (isLoggedIn) {
+                Intent intent = new Intent(MainActivity.this, Chatroom.class);
+                startActivity(intent);
+            } else {
+                Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
+                startActivity(intent);
+            }
+        } else if (id == R.id.Create_Group) {
+            Intent intent = new Intent(MainActivity.this, CreateGroupActivity.class);
+            startActivity(intent);
+        } else if (id == R.id.nav_logout) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("確認登出")
+                    .setMessage("您確定要登出嗎？")
+                    .setPositiveButton("確定", (dialog, which) -> {
+                        SharedPreferences.Editor editor = sharedPreferences.edit();
+                        editor.remove("loggedInUser");
+                        editor.putBoolean("isLoggedIn", false);
+                        editor.putString("userId", "訪客");
+                        editor.apply();
+                        Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
+                        Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
+                        startActivity(intent);
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+        } else {
+            // 處理動態添加的群組選項
+            String groupName = item.getTitle().toString();
+            Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+            if (groupNames.contains(groupName)) {
+                String membersString = sharedPreferences.getString(groupName + "_members", "");
+                List<String> members = new ArrayList<>();
+                if (!membersString.isEmpty()) {
+                    String[] membersArray = membersString.split(",");
+                    for (String member : membersArray) {
+                        members.add(member);
+                    }
+                }
+                Intent intent = new Intent(MainActivity.this, Chatroom.class);
+                intent.putExtra("groupName", groupName);
+                intent.putStringArrayListExtra("members", new ArrayList<>(members));
+                startActivity(intent);
+            }
+        }
+
+        drawerLayout.closeDrawer(GravityCompat.START);
+        return true;
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        } else {
+            super.onBackPressed();
+        }
     }
 
     @Override
@@ -327,7 +469,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     public class CustomSpinnerAdapter extends ArrayAdapter<String> {
-
         public CustomSpinnerAdapter(Context context, int resource, List<String> objects) {
             super(context, resource, objects);
         }
@@ -386,14 +527,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 if (!selectedLocation.equals("請選擇目的地")) {
                     Toast.makeText(MainActivity.this, "您選擇了： " + selectedLocation, Toast.LENGTH_SHORT).show();
                     selectedDestination = selectedLocation;
+                    Log.d("MainActivity", "Destination selected: " + selectedDestination);
                 } else {
                     selectedDestination = "";
+                    Log.d("MainActivity", "Destination not selected");
                 }
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
                 selectedDestination = "";
+                Log.d("MainActivity", "No destination selected");
             }
         });
     }
@@ -422,10 +566,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void captureImage() {
         Log.d("MainActivity", "Starting captureImage()");
 
-        // 修正權限檢查邏輯---直接預設授予存取+拍照的權限
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             Log.d("MainActivity", "Permissions not granted, requesting permissions...");
             ActivityCompat.requestPermissions(this,
                     new String[]{
@@ -598,7 +741,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 bigmap.setImageBitmap(currentBitmap);
                 bigmap.setVisibility(View.VISIBLE);
                 Log.d("MainActivity", "Image displayed on bigmap");
-                updateButtonState(); // 圖片設置後更新按鈕狀態
             });
 
             Mat mat = new Mat();
@@ -611,7 +753,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Intent intent = new Intent(MainActivity.this, ORBActivity.class);
             intent.putExtra("imageUri", photoUri.toString());
             Log.d("MainActivity", "Launching ORBActivity with image URI: " + photoUri.toString());
-            startOrbActivityLauncher.launch(intent);
+            activityResultLauncher.launch(intent);
 
             input.close();
         } catch (IOException e) {
@@ -643,11 +785,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             currentBitmap = bitmap;
             currentBitmapPath = saveBitmapToTempFile(currentBitmap);
             runOnUiThread(() -> {
-                Log.d("MainActivity", "Setting image to bigmap, bitmap size: " + currentBitmap.getWidth() + "x" + currentBitmap.getHeight());
+                Log.d("MainActivity", "Setting image to bigmap, bitmap size: " + currentBitmap.getWidth() + "x" + bitmap.getHeight());
                 bigmap.setImageBitmap(currentBitmap);
                 bigmap.setVisibility(View.VISIBLE);
                 Log.d("MainActivity", "Image displayed on bigmap");
-                updateButtonState(); // 圖片設置後更新按鈕狀態
             });
 
             Mat mat = new Mat();
@@ -658,39 +799,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Intent intent = new Intent(MainActivity.this, ORBActivity.class);
             intent.putExtra("imageUri", selectedImageUri.toString());
             Log.d("MainActivity", "Launching ORBActivity with image URI: " + selectedImageUri.toString());
-            startOrbActivityLauncher.launch(intent);
+            activityResultLauncher.launch(intent);
 
             input.close();
         } catch (IOException e) {
             Log.e("Gallery", "Error processing selected image: " + e.getMessage());
             Toast.makeText(this, "處理選擇的圖片時出錯", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    @Override
-    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-        int id = item.getItemId();
-
-        if (id == R.id.nav_home) {
-            Toast.makeText(this, "Home Selected", Toast.LENGTH_SHORT).show();
-        } else if (id == R.id.nav_store) {
-            Toast.makeText(this, "Gallery Selected", Toast.LENGTH_SHORT).show();
-        } else if (id == R.id.nav_restaurant) {
-            Toast.makeText(this, "Settings Selected", Toast.LENGTH_SHORT).show();
-        } else if (id == R.id.nav_game) {
-            Toast.makeText(this, "Logout Selected", Toast.LENGTH_SHORT).show();
-        }
-
-        drawerLayout.closeDrawer(GravityCompat.START);
-        return true;
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START);
-        } else {
-            super.onBackPressed();
         }
     }
 
@@ -708,5 +822,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 Toast.makeText(this, "需要相機和儲存權限才能使用拍照功能", Toast.LENGTH_LONG).show();
             }
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 每次返回 MainActivity 時更新導航選單和 header
+        updateNavigationMenu();
+        updateHeader();
     }
 }

@@ -124,6 +124,8 @@ dependencies {
     implementation 'com.google.ar:core:1.44.0'
 
 
+    //資料庫權限
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 
         
 }

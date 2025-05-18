@@ -33,9 +33,11 @@
                 android:textColor="@color/color_gray"
                 android:textSize="30sp"
                 android:textStyle="bold"/>
+
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
+
                 <ImageView
                     android:id="@+id/bigmap"
                     android:layout_width="400dp"
@@ -47,7 +49,7 @@
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintHorizontal_bias="0.529"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"/>
+                    app:layout_constraintTop_toTopOf="parent" />
 
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
@@ -102,9 +104,9 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="這是正確的位置"
                         android:enabled="false"
-                        app:layout_constraintTop_toBottomOf="@+id/destinationSpinner"/> <!-- 初始禁用，需選擇目的地後啟用 -->
+                        android:text="這是正確的位置"
+                        app:layout_constraintTop_toBottomOf="@+id/destinationSpinner" /> <!-- 初始禁用，需選擇目的地後啟用 -->
 
                     <!-- 新增的按鈕：位置不正確 -->
                     <Button
@@ -112,9 +114,9 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="位置不正確"
                         android:enabled="false"
-                        app:layout_constraintTop_toBottomOf="@+id/buttonCorrectLocation"/> <!-- 初始禁用，需選擇目的地後啟用 -->
+                        android:text="位置不正確"
+                        app:layout_constraintTop_toBottomOf="@+id/buttonCorrectLocation" /> <!-- 初始禁用，需選擇目的地後啟用 -->
 
                     <LinearLayout
                         android:id="@+id/L1"
@@ -349,6 +351,7 @@
                             </RelativeLayout>
                         </androidx.cardview.widget.CardView>
                     </LinearLayout>
+
                     <TextView
                         android:layout_width="517dp"
                         android:layout_height="174dp"

@@ -57,8 +57,8 @@ public class database extends AppCompatActivity {
 
         //  為了確保資料庫可以打開，嘗試打開它
         try {
-            dbHelper.createDataBase();
-            SQLiteDatabase db = dbHelper.openDataBase(); // 修正方法名稱
+            dbHelper.createDataBase("picture.db");
+            SQLiteDatabase db = dbHelper.openDataBase("picture.db"); // 修正方法名稱
             // 如果可以到達這裡，表示資料庫已成功打開
             Toast.makeText(this, "Database opened successfully", Toast.LENGTH_SHORT).show();
             displayImagesFromDatabase(db); // 顯示圖片
