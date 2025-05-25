@@ -26,6 +26,7 @@ import org.opencv.features2d.ORB;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public class ORBActivity extends AppCompatActivity {
     private ImageView uploadedImageView;
     private TextView locationTextView;
     private Mat uploadedImageMat;
-    private DatabaseHelper dbHelper;
+    private PictureDatabaseHelper dbHelper;
     private SQLiteDatabase database;
     private List<LocationData> locationDataList;
     private ImageView databaseImageView;
@@ -62,14 +63,9 @@ public class ORBActivity extends AppCompatActivity {
         locationTextView = findViewById(R.id.locationTextView);
         databaseImageView = findViewById(R.id.databaseImageView);
 
-        dbHelper = new DatabaseHelper(this);
-        try {
-            dbHelper.createDataBase("picture.db");
-        } catch (IOException e) {
-            Log.e("ORBActivity", "Error creating database: " + e.getMessage());
-        }
-
-        database = dbHelper.openDataBase("picture.db");
+        // Initialize PictureDatabaseHelper
+        dbHelper = new PictureDatabaseHelper(this); // Constructor handles database creation
+        database = dbHelper.getPictureDatabase(); // Get the managed database instance
         locationDataList = new ArrayList<>();
         loadLocationDataFromDatabase();
 
@@ -180,8 +176,9 @@ public class ORBActivity extends AppCompatActivity {
 
             // 降低門檻，允許更多匹配進入結果
             if (numMatches >= 5) {
-                // 構建 assets 文件的 URI（模擬路徑）
-                String imageUriString = "file://assets/images/" + imageFileName;
+                // 構建 assets 文件的 URI（移除多餘的 images/ 前綴）
+                String correctedFileName = imageFileName.startsWith("images/") ? imageFileName : "images/" + imageFileName;
+                String imageUriString = "file://assets/" + correctedFileName; // e.g., "file://assets/images/21.jpg"
                 matchResults.add(new MatchResult(imageUriString, locationData.getLocationName(), numMatches));
                 Log.d("ORBActivity", "Added match: " + locationData.getLocationName() + ", matches: " + numMatches + ", uri: " + imageUriString);
             }
@@ -203,57 +200,29 @@ public class ORBActivity extends AppCompatActivity {
     }
 
     private String getImageFileName(int imageId) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor cursor = null;
-        String fileName = null;
-
-        try {
-            cursor = db.query(
-                    "picture_data",
-                    new String[]{"image", "file_extension"},
-                    "image = ?",
-                    new String[]{String.valueOf(imageId)},
-                    null, null, null
-            );
-
-            if (cursor != null && cursor.moveToFirst()) {
-                String imageName = cursor.getString(cursor.getColumnIndexOrThrow("image"));
-                String fileExtension = cursor.getString(cursor.getColumnIndexOrThrow("file_extension"));
-                fileName = imageName + fileExtension;
-            }
-        } catch (Exception e) {
-            Log.e("ORBActivity", "Error getting image file name from database: " + e.getMessage());
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-
-        return fileName;
+        // Use the method from PictureDatabaseHelper
+        return dbHelper.getImageFileName(imageId);
     }
 
     private void loadLocationDataFromDatabase() {
-        SQLiteDatabase db = dbHelper.openDataBase("picture.db");
+        SQLiteDatabase db = dbHelper.getPictureDatabase(); // Use the managed database instance
         Cursor cursor = null;
         try {
-            cursor = db.query(
-                    "picture_data",
-                    new String[]{"location_data", "image"},
-                    null, null, null, null, null
-            );
+            // Replace raw query with PictureDatabaseHelper.getPictureData()
+            for (int imageId = 1; imageId <= 21; imageId++) { // Assuming IDs 1 to 21 based on logs
+                PictureDatabaseHelper.PictureData data = dbHelper.getPictureData(imageId);
+                if (data != null) {
+                    String locationName = data.locationData != null && !data.locationData.trim().isEmpty() ?
+                            data.locationData : "未知位置";
+                    Log.d("ORBActivity", "Loaded location data: " + locationName + " for image ID: " + imageId);
 
-            while (cursor.moveToNext()) {
-                String locationName = cursor.getString(cursor.getColumnIndexOrThrow("location_data"));
-                if (locationName == null || locationName.trim().isEmpty()) {
-                    locationName = "未知位置";
+                    String imageFileName = dbHelper.getImageFileName(imageId);
+                    Bitmap bitmap = getBitmapFromAsset(imageFileName);
+                    String imageData = bitmap != null ? convertBitmapToBase64(bitmap) : null;
+                    locationDataList.add(new LocationData(locationName, imageData, imageFileName));
+                } else {
+                    Log.w("ORBActivity", "No metadata found for imageId: " + imageId);
                 }
-                Log.d("ORBActivity", "Loaded location data: " + locationName + " for image ID: " + cursor.getInt(cursor.getColumnIndexOrThrow("image")));
-
-                int imageId = cursor.getInt(cursor.getColumnIndexOrThrow("image"));
-                String imageFileName = getImageFileName(imageId);
-                Bitmap bitmap = getBitmapFromAsset(imageFileName);
-                String imageData = bitmap != null ? convertBitmapToBase64(bitmap) : null;
-                locationDataList.add(new LocationData(locationName, imageData, imageFileName));
             }
         } catch (Exception e) {
             Log.e("ORBActivity", "Error loading data from database: " + e.getMessage());
@@ -267,12 +236,16 @@ public class ORBActivity extends AppCompatActivity {
 
     private Bitmap getBitmapFromAsset(String fileName) {
         try {
-            InputStream inputStream = getAssets().open("images/" + fileName);
-            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-            inputStream.close();
+            // Load from context.getFilesDir() instead of assets
+            File imageFile = new File(getFilesDir(), fileName);
+            Log.d("ORBActivity", "Loading image from: " + imageFile.getAbsolutePath());
+            Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
+            if (bitmap == null) {
+                Log.e("ORBActivity", "Failed to decode bitmap from file: " + imageFile.getAbsolutePath());
+            }
             return bitmap;
-        } catch (IOException e) {
-            Log.e("ORBActivity", "Error loading image from asset: " + e.getMessage());
+        } catch (Exception e) {
+            Log.e("ORBActivity", "Error loading image from file: " + fileName + ", Error: " + e.getMessage());
             return null;
         }
     }
@@ -288,11 +261,11 @@ public class ORBActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (database != null) {
+        if (database != null && database.isOpen()) {
             database.close();
         }
         if (dbHelper != null) {
-            dbHelper.close();
+            dbHelper.closeDatabase();
         }
     }
 }

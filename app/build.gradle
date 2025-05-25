@@ -43,6 +43,8 @@ android {
             }
         }
 
+
+
     }
 
     buildTypes {
@@ -127,5 +129,8 @@ dependencies {
     //資料庫權限
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 
+
+    //動畫(?)
+    implementation 'com.airbnb.android:lottie:3.4.1'
         
 }

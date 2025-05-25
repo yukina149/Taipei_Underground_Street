@@ -19,7 +19,7 @@ public class CreatAccount extends AppCompatActivity {
     private EditText editTextNewPassword;
     private EditText editTextConfirmPassword;
     private Button buttonConfirmRegister;
-    private DatabaseHelper dbHelper;
+    private RegisterDatabaseHelper dbHelper; // Change to RegisterDatabaseHelper
     private SharedPreferences sharedPreferences;
 
     @Override
@@ -31,13 +31,7 @@ public class CreatAccount extends AppCompatActivity {
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
 
         // 初始化資料庫
-        dbHelper = new DatabaseHelper(this);
-        try {
-            dbHelper.createDataBase(DatabaseHelper.REGISTER_DB_NAME);
-        } catch (IOException e) {
-            Toast.makeText(this, "Database initialization failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            Log.e("CreatAccount", "Database initialization failed: " + e.getMessage());
-        }
+        dbHelper = new RegisterDatabaseHelper(this); // Change to RegisterDatabaseHelper
 
         // 初始化 UI 元素
         editTextNewUsername = findViewById(R.id.editTextNewUsername);
@@ -109,8 +103,8 @@ public class CreatAccount extends AppCompatActivity {
                 return;
             }
 
-            // 使用 DatabaseHelper 執行註冊
-            DatabaseHelper.RegistrationResult result = dbHelper.registerUser(newUsername, email, newPassword);
+            // 使用 RegisterDatabaseHelper 執行註冊
+            RegisterDatabaseHelper.RegistrationResult result = dbHelper.registerUser(newUsername, email, newPassword);
             if (result.success) {
                 Toast.makeText(CreatAccount.this, "Registration successful! Your ID: " + result.id, Toast.LENGTH_LONG).show();
                 Log.d("CreatAccount", "Registration successful for " + newUsername + ", ID: " + result.id);
@@ -138,7 +132,7 @@ public class CreatAccount extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (dbHelper != null) {
-            dbHelper.close();
+            dbHelper.closeDatabase(); // Use closeDatabase() from RegisterDatabaseHelper
         }
     }
 }

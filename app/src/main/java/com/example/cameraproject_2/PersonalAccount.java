@@ -1,7 +1,5 @@
 package com.example.cameraproject_2;
 
-import static com.example.cameraproject_2.DatabaseHelper.REGISTER_DB_NAME;
-
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -11,15 +9,13 @@ import android.widget.EditText;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.io.IOException;
-
 public class PersonalAccount extends AppCompatActivity {
 
     private EditText editTextUsername;
     private EditText editTextPassword;
     private Button buttonLogin;
     private Button buttonRegister;
-    private DatabaseHelper dbHelper;
+    private RegisterDatabaseHelper dbHelper; // Change to RegisterDatabaseHelper
     private SharedPreferences sharedPreferences;
 
     @Override
@@ -31,13 +27,7 @@ public class PersonalAccount extends AppCompatActivity {
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
 
         // 初始化資料庫
-        dbHelper = new DatabaseHelper(this);
-        try {
-            dbHelper.createDataBase(DatabaseHelper.REGISTER_DB_NAME);
-        } catch (IOException e) {
-            Toast.makeText(this, "Database initialization failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            Log.e("PersonalAccount", "Database initialization failed: " + e.getMessage());
-        }
+        dbHelper = new RegisterDatabaseHelper(this); // Change to RegisterDatabaseHelper
 
         // 初始化 UI 元素
         editTextUsername = findViewById(R.id.editTextUsername);
@@ -73,7 +63,7 @@ public class PersonalAccount extends AppCompatActivity {
 
             if (dbHelper.checkUser(username, password)) {
                 Toast.makeText(PersonalAccount.this, "Login successful", Toast.LENGTH_SHORT).show();
-                Log.d("DatabaseHelper", "Login attempt for " + username + ": Success");
+                Log.d("RegisterDatabaseHelper", "Login attempt for " + username + ": Success");
 
                 // 獲取用戶 ID
                 String userId = dbHelper.getUserId(username, password);
@@ -93,7 +83,7 @@ public class PersonalAccount extends AppCompatActivity {
                 finish(); // 關閉登入畫面
             } else {
                 Toast.makeText(PersonalAccount.this, "Login failed", Toast.LENGTH_SHORT).show();
-                Log.d("DatabaseHelper", "Login attempt for " + username + ": Failed");
+                Log.d("RegisterDatabaseHelper", "Login attempt for " + username + ": Failed");
             }
             dbHelper.syncDatabase();
         });
@@ -109,7 +99,7 @@ public class PersonalAccount extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (dbHelper != null) {
-            dbHelper.close();
+            dbHelper.closeDatabase(); // Use closeDatabase() from RegisterDatabaseHelper
         }
     }
 }

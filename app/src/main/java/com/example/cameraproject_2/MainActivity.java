@@ -1,5 +1,9 @@
 package com.example.cameraproject_2;
 
+import static androidx.activity.result.ActivityResultCallerKt.registerForActivityResult;
+import static com.example.cameraproject_2.PictureDatabaseHelper.PICTURE_DB_NAME;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.REGISTER_DB_NAME;
+
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
@@ -72,6 +76,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private static final String KEY_CURRENT_BITMAP_PATH = "currentBitmapPath";
 
     private ImageView bigmap;
+    private ImageView smallmap; // Added for the new ImageView
     private Uri photoUri;
     private File photoFile;
     private Bitmap currentBitmap;
@@ -79,8 +84,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     CardView cardPicture;
     CardView cardCamera;
-    CardView cardMap;
-    CardView cardGo;
 
     private List<Mat> images = new ArrayList<>();
     private List<LocationData> locationDataList = new ArrayList<>();
@@ -88,7 +91,9 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private ActivityResultLauncher<Intent> activityResultLauncher;
     private ActivityResultLauncher<Intent> takePictureLauncher;
     private ActivityResultLauncher<Intent> pickImageLauncher;
-    private DatabaseHelper dbHelper;
+
+    private RegisterDatabaseHelper registerDbHelper;
+    private PictureDatabaseHelper pictureDbHelper;
     private SQLiteDatabase database;
 
     private String currentLocation = "Unknown";
@@ -104,10 +109,8 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        // 初始化 SharedPreferences，與 BaseActivity 保持一致
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
 
-        // 初始化 drawerLayout 和 navigationView
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
 
@@ -117,7 +120,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             return;
         }
 
-        // 設置 Toggle 按鈕
         ImageView menuIcon = findViewById(R.id.menuIcon);
         menuIcon.setOnClickListener(v -> drawerLayout.openDrawer(GravityCompat.START));
 
@@ -129,34 +131,38 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         navigationView.bringToFront();
         navigationView.setNavigationItemSelectedListener(this);
 
-        // 動態更新導航選單
         updateNavigationMenu();
-
-        // 更新 header
         updateHeader();
 
-        // 其他初始化代碼...
+        registerDbHelper = new RegisterDatabaseHelper(this);
+        pictureDbHelper = new PictureDatabaseHelper(this);
+        try {
+            pictureDbHelper.createDataBase();
+            registerDbHelper.getRegisterDatabase();
+            database = pictureDbHelper.getPictureDatabase();
+        } catch (IOException e) {
+            Log.e("MainActivity", "Error creating databases: " + e.getMessage());
+            Toast.makeText(this, "Database initialization failed", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+
         bigmap = findViewById(R.id.bigmap);
         bigmap.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        smallmap = findViewById(R.id.smallmap); // Initialize the smallmap ImageView
+        smallmap.setScaleType(ImageView.ScaleType.FIT_CENTER); // Optional: Set scale type
 
         if (savedInstanceState != null) {
             String photoUriString = savedInstanceState.getString(KEY_PHOTO_URI);
-            if (photoUriString != null) {
-                photoUri = Uri.parse(photoUriString);
-                Log.d("MainActivity", "Restored photoUri: " + photoUri);
-            }
+            if (photoUriString != null) photoUri = Uri.parse(photoUriString);
 
             String photoFilePath = savedInstanceState.getString(KEY_PHOTO_FILE_PATH);
-            if (photoFilePath != null) {
-                photoFile = new File(photoFilePath);
-                Log.d("MainActivity", "Restored photoFile: " + photoFilePath);
-            }
+            if (photoFilePath != null) photoFile = new File(photoFilePath);
 
             currentBitmapPath = savedInstanceState.getString(KEY_CURRENT_BITMAP_PATH);
             if (currentBitmapPath != null) {
                 try {
                     currentBitmap = BitmapFactory.decodeFile(currentBitmapPath);
-                    Log.d("MainActivity", "Restored currentBitmap from path: " + currentBitmapPath);
                 } catch (Exception e) {
                     Log.e("MainActivity", "Failed to restore currentBitmap: " + e.getMessage());
                     currentBitmap = null;
@@ -167,10 +173,8 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
         if (currentBitmap != null) {
             bigmap.setImageBitmap(currentBitmap);
-            Log.d("MainActivity", "Restored image to bigmap");
         }
 
-        destinationSpinner = findViewById(R.id.destinationSpinner);
         buttonCorrectLocation = findViewById(R.id.buttonCorrectLocation);
         buttonIncorrectLocation = findViewById(R.id.buttonIncorrectLocation);
 
@@ -180,7 +184,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         buttonCorrectLocation.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, UnityPlayerActivity.class);
             startActivity(intent);
-            Log.d("MainActivity", "Launching UnityPlayerActivity");
         });
 
         buttonIncorrectLocation.setOnClickListener(v -> {
@@ -191,10 +194,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             }
             intent.putParcelableArrayListExtra("topMatches", topMatches);
             activityResultLauncher.launch(intent);
-            Log.d("MainActivity", "Launching WhereLocationActivity");
         });
-
-        setupDestinationSpinner();
 
         currentLocationTextView = findViewById(R.id.currentLocationTextView);
 
@@ -208,72 +208,72 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
         cardPicture = findViewById(R.id.cardPicture);
         cardCamera = findViewById(R.id.cardCamera);
-        cardMap = findViewById(R.id.cardMap);
-        cardGo = findViewById(R.id.cardGo);
-
-        cardMap.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, com.example.cameraproject_2.MapActivity.class);
-            intent.putExtra("destination", selectedDestination);
-            Log.d("MainActivity", "Sending destination to MapActivity: " + selectedDestination);
-            startActivity(intent);
-        });
 
         activityResultLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
-                new ActivityResultCallback<ActivityResult>() {
-                    @Override
-                    public void onActivityResult(ActivityResult result) {
-                        if (result.getResultCode() == RESULT_OK) {
-                            Intent intent = result.getData();
-                            if (intent != null) {
-                                String locationFromORB = intent.getStringExtra("location");
-                                if (locationFromORB != null && !locationFromORB.isEmpty()) {
-                                    currentLocation = locationFromORB;
-                                    currentLocationTextView.setText("Location: " + locationFromORB);
-                                    Log.d("MainActivity", "Received location from ORBActivity: " + locationFromORB);
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        Intent intent = result.getData();
+                        if (intent != null) {
+                            String locationFromORB = intent.getStringExtra("location");
+                            if (locationFromORB != null && !locationFromORB.isEmpty()) {
+                                currentLocation = locationFromORB;
+                                currentLocationTextView.setText("Location: " + locationFromORB);
 
-                                    ArrayList<MatchResult> matches = intent.getParcelableArrayListExtra("topMatches");
-                                    if (matches != null && !matches.isEmpty()) {
-                                        topMatches.clear();
-                                        topMatches.addAll(matches);
-                                        Log.d("MainActivity", "Received topMatches from ORBActivity, size: " + topMatches.size());
-                                    }
+                                ArrayList<MatchResult> matches = intent.getParcelableArrayListExtra("topMatches");
+                                if (matches != null && !matches.isEmpty()) {
+                                    topMatches.clear();
+                                    topMatches.addAll(matches);
 
-                                    if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
-                                        buttonCorrectLocation.setEnabled(true);
-                                        buttonIncorrectLocation.setEnabled(true);
-                                        Log.d("MainActivity", "Buttons enabled due to valid location: " + currentLocation);
-                                    } else {
-                                        buttonCorrectLocation.setEnabled(false);
-                                        buttonIncorrectLocation.setEnabled(false);
-                                        Log.d("MainActivity", "Buttons disabled due to invalid location: " + currentLocation);
+                                    // Update smallmap with the best match image
+                                    if (!topMatches.isEmpty()) {
+                                        MatchResult bestMatch = topMatches.get(0);
+                                        String imageUriString = bestMatch.getUri();
+                                        Log.d("MainActivity", "Image URI from ORBActivity: " + imageUriString);
+                                        String fileName = imageUriString.replace("file://assets/", "");
+                                        Log.d("MainActivity", "Attempting to load file: " + fileName);
+                                        try {
+                                            InputStream inputStream = getAssets().open(fileName);
+                                            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+                                            inputStream.close();
+                                            smallmap.setImageBitmap(bitmap);
+                                            Log.d("MainActivity", "Set smallmap with image: " + fileName);
+                                        } catch (IOException e) {
+                                            Log.e("MainActivity", "Error loading image for smallmap: " + fileName + ", Error: " + e.getMessage());
+                                            Toast.makeText(this, "無法加載匹配的地圖圖片", Toast.LENGTH_SHORT).show();
+                                        }
                                     }
-                                    return;
                                 }
 
-                                String selectedLocation = intent.getStringExtra("selectedLocation");
-                                if (selectedLocation != null && !selectedLocation.isEmpty()) {
-                                    currentLocation = selectedLocation;
-                                    currentLocationTextView.setText("Location: " + selectedLocation);
-                                    Log.d("MainActivity", "Received location from WhereLocationActivity: " + selectedLocation);
-                                    Toast.makeText(MainActivity.this, "位置已更新為：" + selectedLocation, Toast.LENGTH_SHORT).show();
-
-                                    if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
-                                        buttonCorrectLocation.setEnabled(true);
-                                        buttonIncorrectLocation.setEnabled(true);
-                                        Log.d("MainActivity", "Buttons enabled due to valid location: " + currentLocation);
-                                    } else {
-                                        buttonCorrectLocation.setEnabled(false);
-                                        buttonIncorrectLocation.setEnabled(false);
-                                        Log.d("MainActivity", "Buttons disabled due to invalid location: " + currentLocation);
-                                    }
+                                if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
+                                    buttonCorrectLocation.setEnabled(true);
+                                    buttonIncorrectLocation.setEnabled(true);
                                 } else {
-                                    Toast.makeText(MainActivity.this, "未選擇位置", Toast.LENGTH_SHORT).show();
+                                    buttonCorrectLocation.setEnabled(false);
+                                    buttonIncorrectLocation.setEnabled(false);
                                 }
+                                return;
                             }
-                        } else {
-                            Toast.makeText(MainActivity.this, "操作取消或失敗", Toast.LENGTH_SHORT).show();
+
+                            String selectedLocation = intent.getStringExtra("selectedLocation");
+                            if (selectedLocation != null && !selectedLocation.isEmpty()) {
+                                currentLocation = selectedLocation;
+                                currentLocationTextView.setText("Location: " + selectedLocation);
+                                Toast.makeText(this, "位置已更新為：" + selectedLocation, Toast.LENGTH_SHORT).show();
+
+                                if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
+                                    buttonCorrectLocation.setEnabled(true);
+                                    buttonIncorrectLocation.setEnabled(false);
+                                } else {
+                                    buttonCorrectLocation.setEnabled(false);
+                                    buttonIncorrectLocation.setEnabled(false);
+                                }
+                            } else {
+                                Toast.makeText(this, "未選擇位置", Toast.LENGTH_SHORT).show();
+                            }
                         }
+                    } else {
+                        Toast.makeText(this, "操作取消或失敗", Toast.LENGTH_SHORT).show();
                     }
                 });
 
@@ -285,7 +285,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                         if (photoUri != null) {
                             processCapturedImage(photoUri);
                         } else {
-                            Log.e("MainActivity", "photoUri is null after capturing image");
                             Intent data = result.getData();
                             if (data != null && data.getData() != null) {
                                 processCapturedImage(data.getData());
@@ -335,10 +334,8 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         Menu navMenu = navigationView.getMenu();
         navMenu.clear();
 
-        // 使用 main_menu.xml 替代 nav_menu.xml
         getMenuInflater().inflate(R.menu.menu_main, navMenu);
 
-        // 動態添加群組選項（保持與 BaseActivity 一致的邏輯）
         Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
         int order = 100;
         for (String groupName : groupNames) {
@@ -349,7 +346,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu); // 保留 menu_main 作為頂部選單（如果需要）
+        getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
 
@@ -395,7 +392,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                     .setNegativeButton("取消", null)
                     .show();
         } else {
-            // 處理動態添加的群組選項
             String groupName = item.getTitle().toString();
             Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
             if (groupNames.contains(groupName)) {
@@ -430,18 +426,9 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        if (photoUri != null) {
-            outState.putString(KEY_PHOTO_URI, photoUri.toString());
-            Log.d("MainActivity", "Saved photoUri: " + photoUri);
-        }
-        if (photoFile != null) {
-            outState.putString(KEY_PHOTO_FILE_PATH, photoFile.getAbsolutePath());
-            Log.d("MainActivity", "Saved photoFile path: " + photoFile.getAbsolutePath());
-        }
-        if (currentBitmapPath != null) {
-            outState.putString(KEY_CURRENT_BITMAP_PATH, currentBitmapPath);
-            Log.d("MainActivity", "Saved currentBitmapPath: " + currentBitmapPath);
-        }
+        if (photoUri != null) outState.putString(KEY_PHOTO_URI, photoUri.toString());
+        if (photoFile != null) outState.putString(KEY_PHOTO_FILE_PATH, photoFile.getAbsolutePath());
+        if (currentBitmapPath != null) outState.putString(KEY_CURRENT_BITMAP_PATH, currentBitmapPath);
     }
 
     private String saveBitmapToTempFile(Bitmap bitmap) {
@@ -452,15 +439,12 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
         try {
             File tempDir = new File(getCacheDir(), "temp_bitmaps");
-            if (!tempDir.exists()) {
-                tempDir.mkdirs();
-            }
+            if (!tempDir.exists()) tempDir.mkdirs();
             File tempFile = File.createTempFile("bitmap_", ".png", tempDir);
             try (FileOutputStream out = new FileOutputStream(tempFile)) {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
                 out.flush();
             }
-            Log.d("MainActivity", "Bitmap saved to temp file: " + tempFile.getAbsolutePath());
             return tempFile.getAbsolutePath();
         } catch (IOException e) {
             Log.e("MainActivity", "Failed to save bitmap to temp file: " + e.getMessage());
@@ -476,91 +460,14 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             View view = super.getView(position, convertView, parent);
-            if (position == 0) {
-                ((TextView) view).setText("請選擇目的地");
-            }
+            if (position == 0) ((TextView) view).setText("請選擇目的地");
             return view;
         }
     }
 
-    private void setupDestinationSpinner() {
-        List<String> locationNamesForDisplay = new ArrayList<>();
-        List<String> locationNamesForDropdown = new ArrayList<>();
-
-        for (LocationData location : locationDataList) {
-            locationNamesForDropdown.add(location.getLocationName());
-        }
-
-        if (locationNamesForDropdown.isEmpty()) {
-            locationNamesForDropdown.add("A棟");
-            locationNamesForDropdown.add("B棟");
-            locationNamesForDropdown.add("C棟");
-            locationNamesForDropdown.add("D棟");
-            locationNamesForDropdown.add("E棟");
-            locationNamesForDropdown.add("F棟");
-            locationNamesForDropdown.add("G棟");
-            locationNamesForDropdown.add("H棟");
-            locationNamesForDropdown.add("I棟");
-            locationNamesForDropdown.add("J棟");
-            locationNamesForDropdown.add("K棟");
-            locationNamesForDropdown.add("L棟");
-            locationNamesForDropdown.add("M棟");
-            locationNamesForDropdown.add("N棟");
-            locationNamesForDropdown.add("NB棟");
-            locationNamesForDropdown.add("排灣族");
-            locationNamesForDropdown.add("資源教室");
-        }
-
-        locationNamesForDisplay.add("請選擇目的地");
-        locationNamesForDisplay.addAll(locationNamesForDropdown);
-
-        CustomSpinnerAdapter adapter = new CustomSpinnerAdapter(
-                this, android.R.layout.simple_spinner_item, locationNamesForDisplay);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        destinationSpinner.setAdapter(adapter);
-        destinationSpinner.setSelection(0);
-
-        destinationSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                String selectedLocation = locationNamesForDisplay.get(position);
-                if (!selectedLocation.equals("請選擇目的地")) {
-                    Toast.makeText(MainActivity.this, "您選擇了： " + selectedLocation, Toast.LENGTH_SHORT).show();
-                    selectedDestination = selectedLocation;
-                    Log.d("MainActivity", "Destination selected: " + selectedDestination);
-                } else {
-                    selectedDestination = "";
-                    Log.d("MainActivity", "Destination not selected");
-                }
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-                selectedDestination = "";
-                Log.d("MainActivity", "No destination selected");
-            }
-        });
-    }
-
     private void setupClickListeners() {
-        findViewById(R.id.cardCamera).setOnClickListener(v -> {
-            Log.d("MainActivity", "Camera button clicked");
-            captureImage();
-        });
-        findViewById(R.id.cardPicture).setOnClickListener(v -> {
-            Log.d("MainActivity", "Gallery button clicked");
-            openGallery();
-        });
-
-        ImageView imageViewDatabase = findViewById(R.id.image_database);
-        if (imageViewDatabase != null) {
-            imageViewDatabase.setOnClickListener(view -> {
-                Intent intent = new Intent(MainActivity.this, database.class);
-                startActivity(intent);
-            });
-        } else {
-            Log.e("MainActivity", "image_view_database not found in layout");
-        }
+        findViewById(R.id.cardCamera).setOnClickListener(v -> captureImage());
+        findViewById(R.id.cardPicture).setOnClickListener(v -> openGallery());
     }
 
     private void captureImage() {
@@ -569,20 +476,14 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            Log.d("MainActivity", "Permissions not granted, requesting permissions...");
             ActivityCompat.requestPermissions(this,
-                    new String[]{
-                            Manifest.permission.CAMERA,
-                            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                            Manifest.permission.READ_EXTERNAL_STORAGE
-                    },
+                    new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE},
                     REQUEST_CAMERA_PERMISSION_CODE);
             return;
         }
 
         try {
             photoFile = createImageFile();
-            Log.d("MainActivity", "Image file created: " + photoFile.getAbsolutePath());
         } catch (IOException e) {
             Log.e("MainActivity", "Error creating image file: " + e.getMessage());
             Toast.makeText(this, "無法創建圖片文件", Toast.LENGTH_SHORT).show();
@@ -590,12 +491,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         }
 
         try {
-            photoUri = FileProvider.getUriForFile(
-                    this,
-                    "com.example.cameraproject_2.fileprovider",
-                    photoFile
-            );
-            Log.d("MainActivity", "Photo URI created: " + photoUri.toString());
+            photoUri = FileProvider.getUriForFile(this, "com.example.cameraproject_2.fileprovider", photoFile);
         } catch (IllegalArgumentException e) {
             Log.e("MainActivity", "Error generating URI with FileProvider: " + e.getMessage());
             Toast.makeText(this, "無法生成圖片 URI，請檢查 FileProvider 配置", Toast.LENGTH_LONG).show();
@@ -605,7 +501,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
             takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
-            Log.d("MainActivity", "Launching camera intent...");
             takePictureLauncher.launch(takePictureIntent);
         } else {
             Log.e("MainActivity", "No camera app available to handle intent");
@@ -617,10 +512,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         String imageFileName = "JPEG_" + timeStamp + "_";
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        if (storageDir == null || !storageDir.exists()) {
-            boolean created = storageDir.mkdirs();
-            Log.d("MainActivity", "Storage directory created: " + created);
-        }
+        if (storageDir == null || !storageDir.exists()) storageDir.mkdirs();
         return File.createTempFile(imageFileName, ".jpg", storageDir);
     }
 
@@ -679,19 +571,13 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 case ExifInterface.ORIENTATION_ROTATE_270:
                     rotationAngle = 270;
                     break;
-                default:
-                    rotationAngle = 0;
-                    break;
             }
-
-            Log.d("MainActivity", "EXIF orientation: " + orientation + ", rotation angle: " + rotationAngle);
 
             if (rotationAngle != 0) {
                 Matrix matrix = new Matrix();
                 matrix.postRotate(rotationAngle);
                 Bitmap rotatedBitmap = Bitmap.createBitmap(originalBitmap, 0, 0, originalBitmap.getWidth(), originalBitmap.getHeight(), matrix, true);
                 originalBitmap.recycle();
-                Log.d("MainActivity", "Bitmap rotated by " + rotationAngle + " degrees");
                 return rotatedBitmap;
             }
         } catch (IOException e) {
@@ -724,8 +610,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 return;
             }
 
-            Log.d("MainActivity", "Bitmap decoded, size: " + bitmap.getWidth() + "x" + bitmap.getHeight());
-
             bitmap = getCorrectedBitmap(photoUri, bitmap);
             if (bitmap == null) {
                 Log.e("MainActivity", "Bitmap is null after getCorrectedBitmap");
@@ -737,22 +621,18 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             currentBitmap = bitmap;
             currentBitmapPath = saveBitmapToTempFile(currentBitmap);
             runOnUiThread(() -> {
-                Log.d("MainActivity", "Setting image to bigmap, bitmap size: " + currentBitmap.getWidth() + "x" + currentBitmap.getHeight());
                 bigmap.setImageBitmap(currentBitmap);
                 bigmap.setVisibility(View.VISIBLE);
-                Log.d("MainActivity", "Image displayed on bigmap");
             });
 
             Mat mat = new Mat();
             Utils.bitmapToMat(bitmap, mat);
             images.add(mat);
-            Log.d("MainActivity", "Image converted to Mat and added to images list");
 
             saveImageToGallery(bitmap);
 
             Intent intent = new Intent(MainActivity.this, ORBActivity.class);
             intent.putExtra("imageUri", photoUri.toString());
-            Log.d("MainActivity", "Launching ORBActivity with image URI: " + photoUri.toString());
             activityResultLauncher.launch(intent);
 
             input.close();
@@ -780,25 +660,19 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 return;
             }
 
-            Log.d("MainActivity", "Bitmap decoded, size: " + bitmap.getWidth() + "x" + bitmap.getHeight());
-
             currentBitmap = bitmap;
             currentBitmapPath = saveBitmapToTempFile(currentBitmap);
             runOnUiThread(() -> {
-                Log.d("MainActivity", "Setting image to bigmap, bitmap size: " + currentBitmap.getWidth() + "x" + bitmap.getHeight());
                 bigmap.setImageBitmap(currentBitmap);
                 bigmap.setVisibility(View.VISIBLE);
-                Log.d("MainActivity", "Image displayed on bigmap");
             });
 
             Mat mat = new Mat();
             Utils.bitmapToMat(bitmap, mat);
             images.add(mat);
-            Log.d("MainActivity", "Image converted to Mat and added to images list");
 
             Intent intent = new Intent(MainActivity.this, ORBActivity.class);
             intent.putExtra("imageUri", selectedImageUri.toString());
-            Log.d("MainActivity", "Launching ORBActivity with image URI: " + selectedImageUri.toString());
             activityResultLauncher.launch(intent);
 
             input.close();
@@ -815,7 +689,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED &&
                     grantResults[1] == PackageManager.PERMISSION_GRANTED &&
                     grantResults[2] == PackageManager.PERMISSION_GRANTED) {
-                Log.d("MainActivity", "All permissions granted, proceeding with captureImage");
                 captureImage();
             } else {
                 Log.w("MainActivity", "Camera or storage permissions denied");
@@ -827,8 +700,14 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     @Override
     protected void onResume() {
         super.onResume();
-        // 每次返回 MainActivity 時更新導航選單和 header
         updateNavigationMenu();
         updateHeader();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (registerDbHelper != null) registerDbHelper.closeDatabase();
+        if (pictureDbHelper != null) pictureDbHelper.closeDatabase();
     }
 }

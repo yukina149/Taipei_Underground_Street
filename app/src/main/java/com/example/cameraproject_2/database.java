@@ -30,7 +30,7 @@ public class database extends AppCompatActivity {
 
     private static final String DATABASE_NAME = "picture.db";
 
-    private DatabaseHelper dbHelper;
+    private PictureDatabaseHelper dbHelper;
 
     private static final String TABLE_NAME = "picture_data";
     private static final String COLUMN_NAME = "name";
@@ -50,15 +50,15 @@ public class database extends AppCompatActivity {
             return insets;
         });
 
-        dbHelper = new DatabaseHelper(this);
+        dbHelper = new PictureDatabaseHelper(this);
 
         // 每次都複製並更新資料庫
         copyDatabase();
 
         //  為了確保資料庫可以打開，嘗試打開它
         try {
-            dbHelper.createDataBase("picture.db");
-            SQLiteDatabase db = dbHelper.openDataBase("picture.db"); // 修正方法名稱
+            dbHelper.createDataBase();
+            SQLiteDatabase db = dbHelper.getPictureDatabase(); // 修正方法名稱
             // 如果可以到達這裡，表示資料庫已成功打開
             Toast.makeText(this, "Database opened successfully", Toast.LENGTH_SHORT).show();
             displayImagesFromDatabase(db); // 顯示圖片
@@ -90,6 +90,8 @@ public class database extends AppCompatActivity {
         try {
             InputStream input = getAssets().open(DATABASE_NAME);
             File dbFile = getDatabasePath(DATABASE_NAME);
+
+            //File dbDir = new File("/data/data/com.example.cameraproject_2/databases/");
 
             // 如果資料庫檔案存在，則刪除它
             if (dbFile.exists()) {

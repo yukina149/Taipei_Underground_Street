@@ -36,7 +36,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String PICTURE_DB_NAME = "picture.db";
     public static final String REGISTER_DB_NAME = "register.db";
     private static final int DATABASE_VERSION = 2;
-    private static final String DB_PATH = "/data/data/com.example.cameraproject_2/database/";
+    private static final String DB_PATH = "/data/data/com.example.cameraproject_2/databases";
 
     public static final String TABLE_NAME = "Users";
     public static final String COL_USERNAME = "username";
@@ -62,13 +62,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
         this.context = context;
         this.dbPath = context.getDatabasePath(REGISTER_DB_NAME).getPath();
-        setServerUrl("http://192.168.10.15:8080"); // 強制設置正確 URL
+        //setServerUrl("http://192.168.10.15:8080"); // 強制設置正確 URL，192.168.10.15
+        setServerUrl("https://549b-61-71-118-80.ngrok-free.app/android_studio"); // 模擬器
         loadServerUrl();
     }
 
+    /*
     private void loadServerUrl() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String defaultUrl = "http://192.168.10.15:8080";
+        SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
+        Log.d(TAG, "Loaded server URL from prefs: " + SERVER_URL);
+    }
+
+     */
+
+
+    private void loadServerUrl() {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        // 如果你在模擬器上運行，使用 10.0.2.2；如果在真機上運行，使用你電腦的 IP
+        String defaultUrl = "https://549b-61-71-118-80.ngrok-free.app/android_studio"; // 模擬器
+        // String defaultUrl = "http://192.168.1.100/android_studio"; // 真機
         SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
         Log.d(TAG, "Loaded server URL from prefs: " + SERVER_URL);
     }
@@ -112,11 +126,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         Log.d(TAG, "Checking if database " + dbName + " exists: " + dbExists);
 
         if (!dbExists) {
-            this.getReadableDatabase();
             try {
                 copyDataBase(dbName);
                 if (dbName.equals(PICTURE_DB_NAME)) {
                     copyImages();
+                    verifyDatabase(dbName); // Verify the database after copying
                 }
                 Log.d(TAG, "Database " + dbName + " created and copied successfully");
             } catch (IOException e) {
@@ -125,17 +139,36 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             }
         } else {
             Log.d(TAG, "Database " + dbName + " already exists, skipping copy");
+            if (dbName.equals(PICTURE_DB_NAME)) {
+                verifyDatabase(dbName); // Verify the database if it already exists
+            }
         }
     }
 
     private boolean checkDataBase(String dbName) {
-        File dbFile = new File(context.getDatabasePath(dbName).getPath());
+        File dbFile;
+        if (dbName.equals(PICTURE_DB_NAME)) {
+            dbFile = new File(DB_PATH + "/" + PICTURE_DB_NAME);
+        } else {
+            dbFile = new File(context.getDatabasePath(dbName).getPath());
+        }
         return dbFile.exists();
     }
 
     private void copyDataBase(String dbName) throws IOException {
         InputStream input = context.getAssets().open(dbName);
-        OutputStream output = new FileOutputStream(context.getDatabasePath(dbName).getPath());
+        File outputFile;
+        if (dbName.equals(PICTURE_DB_NAME)) {
+            File dir = new File(DB_PATH);
+            if (!dir.exists()) {
+                dir.mkdirs();
+                Log.d(TAG, "Created directory: " + DB_PATH);
+            }
+            outputFile = new File(DB_PATH + "/" + PICTURE_DB_NAME);
+        } else {
+            outputFile = new File(context.getDatabasePath(dbName).getPath());
+        }
+        OutputStream output = new FileOutputStream(outputFile);
 
         byte[] buffer = new byte[1024];
         int length;
@@ -148,17 +181,41 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         input.close();
     }
 
+    private void verifyDatabase(String dbName) {
+        SQLiteDatabase db = null;
+        try {
+            String path = dbName.equals(PICTURE_DB_NAME) ? (DB_PATH + "/" + PICTURE_DB_NAME) : context.getDatabasePath(dbName).getPath();
+            db = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READONLY);
+            Cursor cursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='picture_data'", null);
+            boolean tableExists = cursor.moveToFirst();
+            cursor.close();
+            if (!tableExists) {
+                Log.e(TAG, "Table picture_data does not exist in " + dbName);
+            } else {
+                Log.d(TAG, "Table picture_data verified in " + dbName);
+            }
+        } catch (SQLiteException e) {
+            Log.e(TAG, "Error verifying database " + dbName + ": " + e.getMessage());
+        } finally {
+            if (db != null && db.isOpen()) {
+                db.close();
+            }
+        }
+    }
+
     public SQLiteDatabase openDataBase(String dbName) {
         if (dbName.equals(PICTURE_DB_NAME)) {
             if (pictureDatabase == null || !pictureDatabase.isOpen()) {
                 pictureDatabase = SQLiteDatabase.openDatabase(
-                        context.getDatabasePath(PICTURE_DB_NAME).getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+                        DB_PATH + "/" + PICTURE_DB_NAME, null, SQLiteDatabase.OPEN_READWRITE);
+                Log.d(TAG, "Opened pictureDatabase at: " + (DB_PATH + "/" + PICTURE_DB_NAME));
             }
             return pictureDatabase;
         } else if (dbName.equals(REGISTER_DB_NAME)) {
             if (registerDatabase == null || !registerDatabase.isOpen()) {
                 registerDatabase = SQLiteDatabase.openDatabase(
                         context.getDatabasePath(REGISTER_DB_NAME).getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+                Log.d(TAG, "Opened registerDatabase at: " + context.getDatabasePath(REGISTER_DB_NAME).getPath());
             }
             return registerDatabase;
         }
@@ -217,7 +274,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public SQLiteDatabase getPictureDatabase() {
         if (pictureDatabase == null || !pictureDatabase.isOpen()) {
             pictureDatabase = SQLiteDatabase.openDatabase(
-                    context.getDatabasePath(PICTURE_DB_NAME).getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+                    DB_PATH + "/" + PICTURE_DB_NAME, null, SQLiteDatabase.OPEN_READWRITE);
+            Log.d(TAG, "getPictureDatabase opened at: " + (DB_PATH + "/" + PICTURE_DB_NAME));
         }
         return pictureDatabase;
     }
@@ -475,6 +533,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             }
         }
     }
+
     public interface UploadCallback {
         void onUploadComplete(boolean success, String message);
     }
@@ -597,5 +656,83 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     private void showToast(String message) {
         new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, message, Toast.LENGTH_LONG).show());
+    }
+
+    // New method to get image data from picture_data table
+    public String getImageFileName(int imageId) {
+        SQLiteDatabase db = getPictureDatabase();
+        Cursor cursor = null;
+        String fileName = null;
+        try {
+            cursor = db.query("picture_data",
+                    new String[]{"image", "file_extension"},
+                    "image = ?",
+                    new String[]{String.valueOf(imageId)},
+                    null, null, null);
+            if (cursor.moveToFirst()) {
+                int id = cursor.getInt(cursor.getColumnIndexOrThrow("image"));
+                String extension = cursor.getString(cursor.getColumnIndexOrThrow("file_extension"));
+                fileName = "images/" + id + extension; // Assuming numeric filename (e.g., 123.png)
+                Log.d(TAG, "Found filename: " + fileName + " for imageId: " + imageId);
+            } else {
+                Log.w(TAG, "No record found for imageId: " + imageId);
+            }
+        } catch (SQLiteException e) {
+            Log.e(TAG, "Error querying image file name: " + e.getMessage());
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+        return fileName;
+    }
+
+    // New method to get additional metadata from picture_data table
+    public PictureData getPictureData(int imageId) {
+        SQLiteDatabase db = getPictureDatabase();
+        Cursor cursor = null;
+        PictureData data = null;
+        try {
+            cursor = db.query("picture_data",
+                    new String[]{"name", "description", "location_data", "latitude", "longitude"},
+                    "image = ?",
+                    new String[]{String.valueOf(imageId)},
+                    null, null, null);
+            if (cursor.moveToFirst()) {
+                String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                String description = cursor.getString(cursor.getColumnIndexOrThrow("description"));
+                String locationData = cursor.getString(cursor.getColumnIndexOrThrow("location_data"));
+                String latitude = cursor.getString(cursor.getColumnIndexOrThrow("latitude"));
+                String longitude = cursor.getString(cursor.getColumnIndexOrThrow("longitude"));
+                data = new PictureData(name, description, locationData, latitude, longitude);
+                Log.d(TAG, "Found location data: " + locationData + " for imageId: " + imageId);
+            } else {
+                Log.w(TAG, "No metadata found for imageId: " + imageId);
+            }
+        } catch (SQLiteException e) {
+            Log.e(TAG, "Error querying picture data: " + e.getMessage());
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+        return data;
+    }
+
+    // New class to hold picture data
+    public static class PictureData {
+        public final String name;
+        public final String description;
+        public final String locationData;
+        public final String latitude;
+        public final String longitude;
+
+        public PictureData(String name, String description, String locationData, String latitude, String longitude) {
+            this.name = name;
+            this.description = description;
+            this.locationData = locationData;
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
     }
 }
