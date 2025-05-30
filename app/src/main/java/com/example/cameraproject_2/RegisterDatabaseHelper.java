@@ -20,6 +20,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -52,7 +53,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private static final String KEY_LAST_SYNC_TIME = "last_sync_time";
 
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
-    private static String SERVER_URL = "https://549b-61-71-118-80.ngrok-free.app/android_studio"; // Replace with your active Ngrok URL
+    private static String SERVER_URL = "http://192.168.10.15/android_studio";
 
     public RegisterDatabaseHelper(Context context) {
         super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
@@ -62,7 +63,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
     private void loadServerUrl() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String defaultUrl = "https://549b-61-71-118-80.ngrok-free.app/android_studio"; // Replace with your active Ngrok URL
+        String defaultUrl = "http://192.168.10.15/android_studio";
         SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
         Log.d(TAG, "Loaded server URL from prefs: " + SERVER_URL);
     }
@@ -128,10 +129,9 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    // Modified to use getWritableDatabase() instead of manually opening the database
     public SQLiteDatabase getRegisterDatabase() {
         if (registerDatabase == null || !registerDatabase.isOpen()) {
-            registerDatabase = getWritableDatabase(); // This ensures the database is created
+            registerDatabase = getWritableDatabase();
         }
         return registerDatabase;
     }
@@ -201,17 +201,27 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             return new RegistrationResult(false, null);
         } else {
             Log.d(TAG, "User registered locally: " + finalUsername + " with ID: " + randomId);
+            CountDownLatch latch = new CountDownLatch(1);
             executorService.execute(() -> {
                 try {
                     uploadUserToServer(randomId, finalUsername, finalPassword, finalEmail);
                     Log.d(TAG, "User uploaded to server successfully");
                     updateSyncStatus(randomId, 1);
+                    // 在上傳成功後立即同步本地資料庫
+                    syncDatabaseInternal();
                 } catch (IOException | JSONException e) {
                     Log.e(TAG, "Failed to upload user after registration: " + e.getMessage());
                     new Handler(Looper.getMainLooper()).post(() ->
                             showToast("Upload failed: " + e.getMessage()));
+                } finally {
+                    latch.countDown();
                 }
             });
+            try {
+                latch.await(); // 等待上傳和同步完成
+            } catch (InterruptedException e) {
+                Log.e(TAG, "Interrupted while waiting for upload: " + e.getMessage());
+            }
             return new RegistrationResult(true, randomId);
         }
     }
@@ -305,51 +315,76 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         return activeNetwork != null && activeNetwork.isConnected();
     }
 
-    public void syncDatabase() {
+    public boolean syncDatabase() {
         if (!isNetworkAvailable()) {
             Log.d(TAG, "No network available, skipping sync");
             showToast("No network available, sync skipped");
-            return;
+            return false;
         }
 
+        CountDownLatch latch = new CountDownLatch(1);
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         long lastSyncTime = prefs.getLong(KEY_LAST_SYNC_TIME, 0);
         long currentTime = System.currentTimeMillis();
 
+        final boolean[] success = {false};
         executorService.execute(() -> {
-            int retryCount = 0;
-            final int maxRetries = 3;
-            boolean success = false;
-            long backoffDelay = 2000;
+            try {
+                syncDatabaseInternal(lastSyncTime);
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putLong(KEY_LAST_SYNC_TIME, currentTime);
+                editor.apply();
+                success[0] = true;
+            } catch (Exception e) {
+                Log.e(TAG, "Sync failed: " + e.getMessage());
+                new Handler(Looper.getMainLooper()).post(() ->
+                        showToast("Sync failed: " + e.getMessage()));
+            } finally {
+                latch.countDown();
+            }
+        });
 
-            while (retryCount < maxRetries && !success) {
-                try {
-                    Log.d(TAG, "Starting database synchronization (attempt " + (retryCount + 1) + ")...");
-                    uploadUnsyncedUsers();
-                    fetchAndMergeUsersFromServer(lastSyncTime);
-                    Log.d(TAG, "Synchronization completed");
+        try {
+            latch.await(); // 等待同步完成
+        } catch (InterruptedException e) {
+            Log.e(TAG, "Interrupted while waiting for sync: " + e.getMessage());
+            return false;
+        }
+        return success[0];
+    }
 
-                    SharedPreferences.Editor editor = prefs.edit();
-                    editor.putLong(KEY_LAST_SYNC_TIME, currentTime);
-                    editor.apply();
+    private void syncDatabaseInternal() throws IOException, JSONException {
+        syncDatabaseInternal(System.currentTimeMillis());
+    }
 
-                    success = true;
-                } catch (Exception e) {
-                    retryCount++;
-                    Log.e(TAG, "Error syncing database (attempt " + retryCount + "): " + e.getMessage());
-                    if (retryCount < maxRetries) {
-                        try {
-                            Thread.sleep(backoffDelay);
-                            backoffDelay *= 2;
-                        } catch (InterruptedException ie) {
-                            Log.e(TAG, "Retry interrupted: " + ie.getMessage());
-                        }
-                    } else {
-                        showToast("Sync failed after " + maxRetries + " attempts: " + e.getMessage());
+    private void syncDatabaseInternal(long lastSyncTime) throws IOException, JSONException {
+        int retryCount = 0;
+        final int maxRetries = 3;
+        long backoffDelay = 2000;
+        Exception lastException = null;
+
+        while (retryCount < maxRetries) {
+            try {
+                Log.d(TAG, "Starting database synchronization (attempt " + (retryCount + 1) + ")...");
+                uploadUnsyncedUsers();
+                fetchAndMergeUsersFromServer(lastSyncTime);
+                Log.d(TAG, "Synchronization completed");
+                return;
+            } catch (Exception e) {
+                retryCount++;
+                lastException = e;
+                Log.e(TAG, "Error syncing database (attempt " + retryCount + "): " + e.getMessage());
+                if (retryCount < maxRetries) {
+                    try {
+                        Thread.sleep(backoffDelay);
+                        backoffDelay *= 2;
+                    } catch (InterruptedException ie) {
+                        Log.e(TAG, "Retry interrupted: " + ie.getMessage());
                     }
                 }
             }
-        });
+        }
+        throw lastException != null ? new IOException("Sync failed after " + maxRetries + " attempts: " + lastException.getMessage(), lastException) : new IOException("Sync failed after " + maxRetries + " attempts");
     }
 
     private void fetchAndMergeUsersFromServer(long lastSyncTime) throws IOException, JSONException {
@@ -373,7 +408,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
         try (Response response = client.newCall(request).execute()) {
             String responseData = response.body().string();
-            Log.d(TAG, "Fetch users response: " + responseData);
+            Log.d(TAG, "Full fetch users response: " + responseData); // 記錄完整回應
             if (!response.isSuccessful()) {
                 Log.e(TAG, "Failed to fetch users: " + response.code() + " - " + response.message());
                 throw new IOException("Fetch failed: " + response.code() + " - " + response.message());
@@ -393,7 +428,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                         String password = user.getString(COL_PASSWORD);
                         long lastModified = user.getLong(COL_LAST_MODIFIED);
                         int isSynced = user.getInt(COL_IS_SYNCED);
-                        String syncAction = user.getString(COL_SYNC_ACTION);
+                        String syncAction = user.isNull(COL_SYNC_ACTION) ? null : user.getString(COL_SYNC_ACTION);
 
                         ContentValues values = new ContentValues();
                         values.put(COL_ID, id);

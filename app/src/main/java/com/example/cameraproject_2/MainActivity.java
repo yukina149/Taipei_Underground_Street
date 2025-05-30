@@ -114,6 +114,10 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
 
+        //強制更新url
+        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
+        dbHelper.setServerUrl("http://192.168.10.15/android_studio");
+
         if (drawerLayout == null || navigationView == null) {
             Toast.makeText(this, "Navigation setup failed", Toast.LENGTH_SHORT).show();
             finish();
