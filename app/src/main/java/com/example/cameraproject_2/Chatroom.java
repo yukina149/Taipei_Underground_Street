@@ -2,21 +2,24 @@ package com.example.cameraproject_2;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.widget.Toolbar;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.core.view.GravityCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.navigation.NavigationView;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -33,13 +36,16 @@ public class Chatroom extends BaseActivity {
     private MessageAdapter messageAdapter;
     private String groupName;
     private ArrayList<String> members;
+    private boolean hasAcceptedInvitation;
+    private RegisterDatabaseHelper dbHelper;
+    private String currentUserId;
+    private String currentUsername;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chatroom);
 
-        // 初始化 drawerLayout 和 navigationView
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
 
@@ -47,11 +53,10 @@ public class Chatroom extends BaseActivity {
         setSupportActionBar(toolbar);
 
         if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("taipei underground");  // 你想顯示的標題文字
+            getSupportActionBar().setTitle("taipei underground");
             getSupportActionBar().setDisplayShowTitleEnabled(true);
         }
 
-        // 使用 ActionBarDrawerToggle 連結 DrawerLayout 與 Toolbar
         toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.open, R.string.close);
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
@@ -62,11 +67,9 @@ public class Chatroom extends BaseActivity {
             return;
         }
 
-        // 使用基底類方法設置 Drawer 和 Toggle
         setupDrawer();
-        updateNavigationMenu(); // 初始加載選單
+        updateNavigationMenu();
 
-        // 初始化 UI 元素
         messageRecyclerView = findViewById(R.id.messageRecyclerView);
         editTextMessage = findViewById(R.id.editTextMessage);
         buttonSend = findViewById(R.id.buttonSend);
@@ -79,18 +82,37 @@ public class Chatroom extends BaseActivity {
             return;
         }
 
-        // 接收群組資訊
         Intent intent = getIntent();
         groupName = intent.getStringExtra("groupName");
         members = intent.getStringArrayListExtra("members");
 
         if (groupName == null || members == null) {
-            Toast.makeText(this, "Failed to load group info", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
+            groupName = intent.getStringExtra("groupName");
+            if (groupName != null) {
+                String membersString = sharedPreferences.getString(groupName + "_members", "");
+                members = new ArrayList<>();
+                if (!membersString.isEmpty()) {
+                    String[] membersArray = membersString.split(",");
+                    for (String member : membersArray) {
+                        members.add(member);
+                    }
+                }
+            }
+            if (groupName == null || members.isEmpty()) {
+                Toast.makeText(this, "Failed to load group info", Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
         }
 
-        // 顯示群組名稱和成員
+        // 初始化資料庫和用戶資訊
+        dbHelper = new RegisterDatabaseHelper(this);
+        currentUserId = sharedPreferences.getString("userId", "Unknown");
+        currentUsername = sharedPreferences.getString("loggedInUser", "Unknown");
+
+        // 檢查邀請狀態
+        checkInvitationStatus();
+
         if (textViewGroupName != null) {
             textViewGroupName.setText("Group: " + groupName);
         }
@@ -98,28 +120,47 @@ public class Chatroom extends BaseActivity {
             textViewMembers.setText("Members: " + String.join(", ", members));
         }
 
-        // 初始化訊息列表和適配器
         messageList = new ArrayList<>();
+        Set<String> savedMessages = sharedPreferences.getStringSet(groupName + "_messages", new HashSet<>());
+        messageList.addAll(savedMessages);
         messageAdapter = new MessageAdapter(messageList);
         messageRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         messageRecyclerView.setAdapter(messageAdapter);
+        messageRecyclerView.scrollToPosition(messageList.size() - 1);
 
-        // 顯示歡迎訊息
-        String username = sharedPreferences.getString("loggedInUser", "User");
-        Toast.makeText(this, "Welcome to " + groupName + ", " + username + "!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Welcome to " + groupName + ", " + currentUsername + "!", Toast.LENGTH_SHORT).show();
 
-        // 發送按鈕點擊事件
+        if (!hasAcceptedInvitation) {
+            buttonSend.setEnabled(false);
+            editTextMessage.setEnabled(false);
+            editTextMessage.setHint("請先接受群組邀請才能發送訊息");
+        } else {
+            buttonSend.setEnabled(true);
+            editTextMessage.setEnabled(true);
+            editTextMessage.setHint("輸入訊息...");
+        }
+
         buttonSend.setOnClickListener(v -> {
+            if (!hasAcceptedInvitation) {
+                Toast.makeText(this, "請先接受群組邀請", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             String message = editTextMessage.getText().toString().trim();
             if (!message.isEmpty()) {
-                messageList.add(username + ": " + message);
+                String fullMessage = currentUsername + ": " + message;
+                messageList.add(fullMessage);
                 messageAdapter.notifyItemInserted(messageList.size() - 1);
                 messageRecyclerView.scrollToPosition(messageList.size() - 1);
                 editTextMessage.setText("");
+
+                Set<String> updatedMessages = new HashSet<>(messageList);
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putStringSet(groupName + "_messages", updatedMessages);
+                editor.apply();
             }
         });
 
-        // 設置 Navigation Item 點擊事件
         navigationView.setNavigationItemSelectedListener(item -> {
             int id = item.getItemId();
             Intent navigationIntent = null;
@@ -141,11 +182,10 @@ public class Chatroom extends BaseActivity {
                 navigationIntent = new Intent(Chatroom.this, CreateGroupActivity.class);
                 startActivity(navigationIntent);
             } else {
-                // 處理動態添加的群組選項
-                String groupName = item.getTitle().toString();
+                String selectedGroupName = item.getTitle().toString();
                 Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
-                if (groupNames.contains(groupName)) {
-                    String membersString = sharedPreferences.getString(groupName + "_members", "");
+                if (groupNames.contains(selectedGroupName)) {
+                    String membersString = sharedPreferences.getString(selectedGroupName + "_members", "");
                     List<String> membersList = new ArrayList<>();
                     if (!membersString.isEmpty()) {
                         String[] membersArray = membersString.split(",");
@@ -154,7 +194,7 @@ public class Chatroom extends BaseActivity {
                         }
                     }
                     navigationIntent = new Intent(Chatroom.this, Chatroom.class);
-                    navigationIntent.putExtra("groupName", groupName);
+                    navigationIntent.putExtra("groupName", selectedGroupName);
                     navigationIntent.putStringArrayListExtra("members", new ArrayList<>(membersList));
                     startActivity(navigationIntent);
                 }
@@ -167,11 +207,70 @@ public class Chatroom extends BaseActivity {
         });
     }
 
+    // 檢查邀請狀態
+    private void checkInvitationStatus() {
+        // 同步邀請資料
+        dbHelper.syncInvitations();
+
+        // 查詢當前用戶的所有邀請
+        List<Invitation> pendingInvitations = dbHelper.getPendingInvitations(currentUserId);
+        hasAcceptedInvitation = true; // 預設為已接受
+
+        // 如果有 pending 邀請，則未接受
+        for (Invitation invitation : pendingInvitations) {
+            if (invitation.getGroupName().equals(groupName)) {
+                hasAcceptedInvitation = false;
+                break;
+            }
+        }
+
+        // 如果沒有 pending 邀請，進一步檢查是否已接受
+        if (hasAcceptedInvitation) {
+            SQLiteDatabase db = dbHelper.getRegisterDatabase();
+            Cursor cursor = db.query(RegisterDatabaseHelper.TABLE_INVITATIONS,
+                    new String[]{RegisterDatabaseHelper.COL_STATUS},
+                    RegisterDatabaseHelper.COL_INVITED_USER + "=? AND " + RegisterDatabaseHelper.COL_GROUP_NAME + "=?",
+                    new String[]{currentUsername, groupName},
+                    null, null, null);
+
+            if (cursor.moveToFirst()) {
+                String status = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_STATUS));
+                hasAcceptedInvitation = "accepted".equals(status);
+            } else {
+                // 如果沒有邀請記錄，檢查是否在成員名單中
+                hasAcceptedInvitation = members.contains(currentUsername);
+            }
+            cursor.close();
+        }
+
+        Log.d("Chatroom", "User: " + currentUsername + ", Group: " + groupName + ", hasAcceptedInvitation: " + hasAcceptedInvitation);
+        updateUI();
+    }
+
+    // 更新 UI 狀態
+    private void updateUI() {
+        if (hasAcceptedInvitation) {
+            buttonSend.setEnabled(true);
+            editTextMessage.setEnabled(true);
+            editTextMessage.setHint("輸入訊息...");
+        } else {
+            buttonSend.setEnabled(false);
+            editTextMessage.setEnabled(false);
+            editTextMessage.setHint("請先接受群組邀請才能發送訊息");
+        }
+    }
+
+    // 假設有一個方法在接受邀請後被呼叫
+    public void onInvitationAccepted(String invitationId) {
+        dbHelper.updateInvitationStatus(invitationId, "accepted");
+        checkInvitationStatus(); // 重新檢查狀態並更新 UI
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
-        // 每次返回 Chatroom 時更新選單
         updateNavigationMenu();
+        checkInvitationStatus(); // 每次恢復時重新檢查
     }
 
     @Override
@@ -180,5 +279,13 @@ public class Chatroom extends BaseActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (dbHelper != null) {
+            dbHelper.closeDatabase();
+        }
     }
 }

@@ -8,7 +8,7 @@
     <string name="database_image_desc">資料庫匹配的圖片</string>
     <string name="location_unknown">Location: Unknown</string>
     <string name="upload_image">上傳圖片</string>
-
+    <string name="appbar_scrolling_view_behavior">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
 
     <string name="game_view_content_description">Game view</string><!--unity需要-->
 

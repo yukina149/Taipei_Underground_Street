@@ -1,5 +1,7 @@
 package com.example.cameraproject_2;
 
+import static org.opencv.android.NativeCameraView.TAG;
+
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -23,7 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class BaseActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+public abstract class BaseActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     protected SharedPreferences sharedPreferences;
     protected DrawerLayout drawerLayout;
@@ -36,23 +38,20 @@ public class BaseActivity extends AppCompatActivity implements NavigationView.On
         super.onCreate(savedInstanceState);
 
         EdgeToEdge.enable(this);
-        setContentView(R.layout.activity_main);
 
-        // 初始化 SharedPreferences
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
 
-        // 設置 SharedPreferences 監聽器
         preferenceChangeListener = (sharedPrefs, key) -> {
             Log.d("BaseActivity", "Preference changed, key: " + key);
             if (key.equals("isLoggedIn") || key.equals("loggedInUser") || key.equals("userId") || key.equals("groupNames")) {
                 Log.d("BaseActivity", "Relevant key changed, updating UI");
                 updateHeader();
-                updateNavigationMenu(); // 確保選單在數據更改時更新
+                updateNavigationMenu();
                 if (navigationView != null) {
                     navigationView.getMenu().clear();
                     getMenuInflater().inflate(R.menu.nav_menu, navigationView.getMenu());
                     updateNavigationMenu();
-                    navigationView.requestLayout(); // 強制重新佈局
+                    navigationView.requestLayout();
                 }
             }
         };
@@ -61,9 +60,7 @@ public class BaseActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onStart() {
         super.onStart();
-        // 註冊監聽器
         sharedPreferences.registerOnSharedPreferenceChangeListener(preferenceChangeListener);
-        // 每次進入前台時刷新 header 和選單
         updateHeader();
         updateNavigationMenu();
         Log.d("BaseActivity", "onStart: Navigation menu updated");
@@ -72,34 +69,44 @@ public class BaseActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onStop() {
         super.onStop();
-        // 取消監聽器以避免內存洩漏
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener);
     }
 
     protected void updateNavigationMenu() {
-        if (navigationView == null) {
-            Log.e("BaseActivity", "navigationView is null");
-            return;
-        }
-
-        Menu navMenu = navigationView.getMenu();
-        navMenu.clear();
-        Log.d("BaseActivity", "Menu cleared, inflating nav_menu");
-
-        // 載入 nav_menu.xml 作為基礎選單
-        getMenuInflater().inflate(R.menu.nav_menu, navMenu);
-
-        // 動態添加群組選項
+        Menu menu = navigationView.getMenu();
+        menu.clear();
+        Log.d(TAG, "Menu cleared, inflating nav_menu");
         Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
-        Log.d("BaseActivity", "Group names from SharedPreferences: " + groupNames.toString());
-        int order = 100; // 確保動態項位於靜態項之後
+        Log.d(TAG, "Group names from SharedPreferences: " + groupNames);
         for (String groupName : groupNames) {
-            MenuItem item = navMenu.add(Menu.NONE, Menu.NONE, order++, groupName)
-                    .setIcon(R.drawable.store_icon); // 確保 store_icon 資源存在
-            Log.d("BaseActivity", "Added group: " + groupName);
+            menu.add(groupName).setOnMenuItemClickListener(item -> {
+                startChatroomActivity(groupName);
+                return true;
+            });
+            Log.d(TAG, "Added group: " + groupName);
         }
-        navigationView.invalidate(); // 強制刷新導航視圖
-        navigationView.requestLayout(); // 確保視圖重新佈局
+        navigationView.invalidate();
+    }
+
+    protected void startChatroomActivity(String groupName) {
+        Intent intent = new Intent(this, Chatroom.class);
+        intent.putExtra("groupName", groupName);
+        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+        if (groupNames.contains(groupName)) {
+            String membersString = sharedPreferences.getString(groupName + "_members", "");
+            List<String> members = new ArrayList<>();
+            if (!membersString.isEmpty()) {
+                String[] membersArray = membersString.split(",");
+                for (String member : membersArray) {
+                    members.add(member.trim());
+                }
+            }
+            intent.putStringArrayListExtra("members", new ArrayList<>(members));
+        }
+        startActivity(intent);
+        if (drawerLayout != null) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
     }
 
     protected void updateHeader() {
@@ -130,7 +137,6 @@ public class BaseActivity extends AppCompatActivity implements NavigationView.On
         usernameValue.setText(username);
         accountValue.setText(userId);
 
-        // 強制刷新 UI
         headerView.invalidate();
         headerView.requestLayout();
     }
@@ -147,7 +153,7 @@ public class BaseActivity extends AppCompatActivity implements NavigationView.On
 
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setHomeButtonEnabled(true); // 確保 Home 按鈕可用
+            getSupportActionBar().setHomeButtonEnabled(true);
         } else {
             Toast.makeText(this, "ActionBar not available", Toast.LENGTH_SHORT).show();
         }
@@ -189,7 +195,6 @@ public class BaseActivity extends AppCompatActivity implements NavigationView.On
                     .setNegativeButton("取消", null)
                     .show();
         } else {
-            // 處理動態添加的群組選項
             String groupName = item.getTitle().toString();
             Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
             if (groupNames.contains(groupName)) {

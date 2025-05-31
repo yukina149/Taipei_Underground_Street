@@ -5,6 +5,8 @@ import static com.example.cameraproject_2.PictureDatabaseHelper.PICTURE_DB_NAME;
 import static com.example.cameraproject_2.RegisterDatabaseHelper.REGISTER_DB_NAME;
 
 import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -15,8 +17,11 @@ import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.media.ExifInterface;
 import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
@@ -31,27 +36,35 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
-import androidx.activity.result.ActivityResult;
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.appcompat.app.AlertDialog;
 import androidx.cardview.widget.CardView;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import com.google.android.material.navigation.NavigationView;
 import com.unity3d.player.UnityPlayerActivity;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -67,16 +80,17 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     }
 
     private static final int REQUEST_CAMERA_PERMISSION_CODE = 1;
-    private static final int REQUEST_IMAGE_CAPTURE = 2;
-    private static final int REQUEST_IMAGE_PICK = 3;
+    private static final int REQUEST_NOTIFICATION_PERMISSION_CODE = 1002;
     private static final int REQUEST_LOCATION_CONFIRM = 1001;
-
     private static final String KEY_PHOTO_URI = "photoUri";
     private static final String KEY_PHOTO_FILE_PATH = "photoFilePath";
     private static final String KEY_CURRENT_BITMAP_PATH = "currentBitmapPath";
+    private static final String INVITATION_CHECK_URL = "http://192.168.10.15/android_studio/fetch_invitations.php";
+    private static final String USER_ID_KEY = "userId";
+    private static final long CHECK_INTERVAL = 30000; // 每 30 秒檢查一次
 
     private ImageView bigmap;
-    private ImageView smallmap; // Added for the new ImageView
+    private ImageView smallmap;
     private Uri photoUri;
     private File photoFile;
     private Bitmap currentBitmap;
@@ -103,6 +117,9 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private Button buttonCorrectLocation;
     private Button buttonIncorrectLocation;
 
+    private Handler handler = new Handler();
+    private Runnable invitationChecker;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -114,7 +131,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
 
-        //強制更新url
         RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
         dbHelper.setServerUrl("http://192.168.10.15/android_studio");
 
@@ -153,8 +169,8 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
         bigmap = findViewById(R.id.bigmap);
         bigmap.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        smallmap = findViewById(R.id.smallmap); // Initialize the smallmap ImageView
-        smallmap.setScaleType(ImageView.ScaleType.FIT_CENTER); // Optional: Set scale type
+        smallmap = findViewById(R.id.smallmap);
+        smallmap.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
         if (savedInstanceState != null) {
             String photoUriString = savedInstanceState.getString(KEY_PHOTO_URI);
@@ -229,7 +245,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                                     topMatches.clear();
                                     topMatches.addAll(matches);
 
-                                    // Update smallmap with the best match image
                                     if (!topMatches.isEmpty()) {
                                         MatchResult bestMatch = topMatches.get(0);
                                         String imageUriString = bestMatch.getUri();
@@ -326,6 +341,9 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         if (headerView == null) {
             headerView = navigationView.inflateHeaderView(R.layout.activity_menu_header);
         }
+
+        createNotificationChannel();
+        startInvitationChecking();
     }
 
     @Override
@@ -526,7 +544,8 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             return;
         }
 
-        File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+        // Use app-specific external storage instead of public storage
+        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         String fileName = "IMG_" + timeStamp + ".jpg";
         File imageFile = new File(storageDir, fileName);
@@ -539,11 +558,11 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             mediaScanIntent.setData(Uri.fromFile(imageFile));
             sendBroadcast(mediaScanIntent);
 
-            Log.d("MainActivity", "Image saved to gallery: " + imageFile.getAbsolutePath());
-            Toast.makeText(this, "圖片已儲存至相簿", Toast.LENGTH_SHORT).show();
+            Log.d("MainActivity", "Image saved to app storage: " + imageFile.getAbsolutePath());
+            Toast.makeText(this, "圖片已儲存至應用儲存空間", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Log.e("Storage", "Error saving image to gallery: " + e.getMessage());
-            Toast.makeText(this, "無法儲存圖片至相簿", Toast.LENGTH_SHORT).show();
+            Log.e("Storage", "Error saving image to app storage: " + e.getMessage());
+            Toast.makeText(this, "無法儲存圖片", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -698,7 +717,106 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 Log.w("MainActivity", "Camera or storage permissions denied");
                 Toast.makeText(this, "需要相機和儲存權限才能使用拍照功能", Toast.LENGTH_LONG).show();
             }
+        } else if (requestCode == REQUEST_NOTIFICATION_PERMISSION_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "通知權限已授予", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "需要通知權限以接收群組邀請通知", Toast.LENGTH_LONG).show();
+            }
         }
+    }
+
+    private void checkInvitations() {
+        String currentUserId = sharedPreferences.getString(USER_ID_KEY, "訪客");
+        if (currentUserId.equals("訪客")) {
+            Log.d("MainActivity", "User not logged in, skipping invitation check");
+            return;
+        }
+
+        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
+        List<Invitation> invitations = dbHelper.getPendingInvitations(currentUserId);
+        Log.d("MainActivity", "Found " + invitations.size() + " pending invitations for userId: " + currentUserId);
+
+        for (Invitation invitation : invitations) {
+            String groupName = invitation.getGroupName();
+            // 檢查是否已經處理過該邀請
+            if (!isGroupInPreferences(groupName)) {
+                Log.d("MainActivity", "New invitation for group: " + groupName);
+                runOnUiThread(() -> showInvitationDialog(groupName, invitation.getInvitationId()));
+                updateGroupInPreferences(groupName);
+                updateNavigationMenu();
+            }
+        }
+    }
+    private void showInvitationDialog(String groupName, String invitationId) {
+        new AlertDialog.Builder(this)
+                .setTitle("群組邀請")
+                .setMessage("您被邀請加入群組: " + groupName)
+                .setPositiveButton("接受", (dialog, which) -> {
+                    registerDbHelper.updateInvitationStatus(invitationId, "accepted");
+                    Toast.makeText(this, "已接受群組邀請：" + groupName, Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("拒絕", (dialog, which) -> {
+                    registerDbHelper.updateInvitationStatus(invitationId, "rejected");
+                    Toast.makeText(this, "已拒絕群組邀請：" + groupName, Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    private boolean isGroupInPreferences(String groupName) {
+        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+        return groupNames.contains(groupName);
+    }
+
+    private void updateGroupInPreferences(String groupName) {
+        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+        groupNames.add(groupName);
+        sharedPreferences.edit().putStringSet("groupNames", groupNames).apply();
+    }
+
+    private void showInvitationNotification(String groupName) {
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "invitation_channel")
+                .setSmallIcon(android.R.drawable.ic_dialog_info) // Use default system icon
+                .setContentTitle("新群組邀請")
+                .setContentText("您收到來自群組 " + groupName + " 的邀請")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true);
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_PERMISSION_CODE);
+            return;
+        }
+        notificationManager.notify((int) System.currentTimeMillis(), builder.build());
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "Invitation Channel";
+            String description = "Channel for group invitation notifications";
+            int importance = NotificationManager.IMPORTANCE_DEFAULT;
+            NotificationChannel channel = new NotificationChannel("invitation_channel", name, importance);
+            channel.setDescription(description);
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
+    private void startInvitationChecking() {
+        invitationChecker = new Runnable() {
+            @Override
+            public void run() {
+                // 先同步資料庫
+                registerDbHelper.syncInvitations();
+                // 檢查是否有新邀請
+                checkInvitations();
+                handler.postDelayed(this, CHECK_INTERVAL);
+            }
+        };
+        handler.post(invitationChecker);
     }
 
     @Override
@@ -711,6 +829,9 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (handler != null && invitationChecker != null) {
+            handler.removeCallbacks(invitationChecker);
+        }
         if (registerDbHelper != null) registerDbHelper.closeDatabase();
         if (pictureDbHelper != null) pictureDbHelper.closeDatabase();
     }

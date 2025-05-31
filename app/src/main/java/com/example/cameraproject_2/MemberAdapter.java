@@ -9,57 +9,65 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
-import com.example.cameraproject_2.User; // 確保添加這行
 
 public class MemberAdapter extends RecyclerView.Adapter<MemberAdapter.MemberViewHolder> {
 
-    private List<User> userList;
+    private List<User> users;
+    private List<String> selectedMembers;
 
-    public MemberAdapter(List<User> userList) {
-        this.userList = userList;
+    public MemberAdapter(List<User> users) {
+        this.users = users;
+        this.selectedMembers = new ArrayList<>();
     }
 
     @NonNull
     @Override
     public MemberViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_member, parent, false);
+                .inflate(android.R.layout.simple_list_item_2, parent, false);
         return new MemberViewHolder(view);
     }
 
     @Override
     public void onBindViewHolder(@NonNull MemberViewHolder holder, int position) {
-        User user = userList.get(position);
-        holder.textView.setText(user.getUsername() + " (ID: " + user.getId() + ")");
-        holder.checkBox.setChecked(user.isSelected());
+        User user = users.get(position);
+        holder.textViewUsername.setText(user.getUsername());
+        holder.textViewId.setText(user.getId());
+        holder.checkBox.setChecked(selectedMembers.contains(user.getUsername()));
         holder.checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            user.setSelected(isChecked);
+            if (isChecked) {
+                if (!selectedMembers.contains(user.getUsername())) {
+                    selectedMembers.add(user.getUsername());
+                }
+            } else {
+                selectedMembers.remove(user.getUsername());
+            }
         });
     }
 
     @Override
     public int getItemCount() {
-        return userList.size();
+        return users.size();
     }
 
     public List<String> getSelectedMembers() {
-        List<String> selectedMembers = new ArrayList<>();
-        for (User user : userList) {
-            if (user.isSelected()) {
-                selectedMembers.add(user.getId());
-            }
-        }
         return selectedMembers;
     }
 
     static class MemberViewHolder extends RecyclerView.ViewHolder {
+        TextView textViewUsername;
+        TextView textViewId;
         CheckBox checkBox;
-        TextView textView;
 
-        public MemberViewHolder(@NonNull View itemView) {
+        MemberViewHolder(View itemView) {
             super(itemView);
-            checkBox = itemView.findViewById(R.id.checkbox_member);
-            textView = itemView.findViewById(R.id.text_member);
+            textViewUsername = itemView.findViewById(android.R.id.text1);
+            textViewId = itemView.findViewById(android.R.id.text2);
+            checkBox = new CheckBox(itemView.getContext());
+            checkBox.setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+            ((ViewGroup) itemView).addView(checkBox);
         }
     }
 }

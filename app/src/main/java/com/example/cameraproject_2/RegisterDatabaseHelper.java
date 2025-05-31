@@ -19,6 +19,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -34,7 +36,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String TAG = "RegisterDatabaseHelper";
     public static final String REGISTER_DB_NAME = "register.db";
-    private static final int DATABASE_VERSION = 3;
+    private static final int DATABASE_VERSION = 5;
 
     public static final String TABLE_NAME = "Users";
     public static final String COL_ID = "id";
@@ -44,6 +46,13 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_LAST_MODIFIED = "last_modified";
     public static final String COL_IS_SYNCED = "is_synced";
     public static final String COL_SYNC_ACTION = "sync_action";
+
+    public static final String TABLE_INVITATIONS = "groupinvitations";
+    public static final String COL_INVITATION_ID = "invitation_id";
+    public static final String COL_GROUP_NAME = "group_name";
+    public static final String COL_INVITED_USER = "invited_user";
+    public static final String COL_STATUS = "status";
+    public static final String COL_IS_SYNCED_INV = "is_synced";
 
     private final Context context;
     private SQLiteDatabase registerDatabase;
@@ -59,6 +68,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
         this.context = context;
         loadServerUrl();
+        checkDatabaseIntegrity();
     }
 
     private void loadServerUrl() {
@@ -89,6 +99,18 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 COL_SYNC_ACTION + " TEXT)";
         db.execSQL(createTable);
         Log.d(TAG, "Database created with table: " + TABLE_NAME);
+
+        String createInvitationsTable = "CREATE TABLE IF NOT EXISTS " + TABLE_INVITATIONS + " (" +
+                COL_INVITATION_ID + " TEXT PRIMARY KEY, " +
+                COL_GROUP_NAME + " TEXT NOT NULL, " +
+                COL_INVITED_USER + " TEXT NOT NULL, " +
+                COL_STATUS + " TEXT NOT NULL, " +
+                COL_IS_SYNCED_INV + " INTEGER DEFAULT 0, " +
+                "UNIQUE(" + COL_GROUP_NAME + ", " + COL_INVITED_USER + "))";
+        db.execSQL(createInvitationsTable);
+        Log.d(TAG, "Database created with table: " + TABLE_INVITATIONS);
+
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_invited_user ON " + TABLE_INVITATIONS + " (" + COL_INVITED_USER + ")");
     }
 
     @Override
@@ -127,6 +149,25 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
             Log.d(TAG, "Upgraded last_modified to BIGINT");
         }
+        if (oldVersion < 4) {
+            String createInvitationsTable = "CREATE TABLE IF NOT EXISTS " + TABLE_INVITATIONS + " (" +
+                    COL_INVITATION_ID + " TEXT PRIMARY KEY, " +
+                    COL_GROUP_NAME + " TEXT NOT NULL, " +
+                    COL_INVITED_USER + " TEXT NOT NULL, " +
+                    COL_STATUS + " TEXT NOT NULL, " +
+                    "UNIQUE(" + COL_GROUP_NAME + ", " + COL_INVITED_USER + "))";
+            db.execSQL(createInvitationsTable);
+            Log.d(TAG, "Created GroupInvitations table during upgrade");
+        }
+        if (oldVersion < 5) {
+            try {
+                db.execSQL("ALTER TABLE " + TABLE_INVITATIONS + " ADD COLUMN " + COL_IS_SYNCED_INV + " INTEGER DEFAULT 0");
+                Log.d(TAG, "Added is_synced column to GroupInvitations table during upgrade");
+            } catch (SQLiteException e) {
+                Log.e(TAG, "Error adding is_synced column during upgrade: " + e.getMessage());
+            }
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_invited_user ON " + TABLE_INVITATIONS + " (" + COL_INVITED_USER + ")");
+        }
     }
 
     public SQLiteDatabase getRegisterDatabase() {
@@ -154,6 +195,84 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             randomId.append(characters.charAt(random.nextInt(characters.length())));
         }
         return randomId.toString();
+    }
+
+    private String getUserIdFromUsername(String username) {
+        SQLiteDatabase db = getRegisterDatabase();
+        Log.d(TAG, "Querying userId for username: " + username);
+        Cursor cursor = db.query(TABLE_NAME, new String[]{COL_ID},
+                COL_USERNAME + "=?", new String[]{username}, null, null, null);
+        String userId = null;
+        if (cursor.moveToFirst()) {
+            userId = cursor.getString(cursor.getColumnIndexOrThrow(COL_ID));
+            Log.d(TAG, "Found userId: " + userId + " for username: " + username);
+        } else {
+            Log.e(TAG, "No userId found for username: " + username);
+        }
+        cursor.close();
+        return userId;
+    }
+
+    private String getUsernameFromUserId(String userId) {
+        SQLiteDatabase db = getRegisterDatabase();
+        Log.d(TAG, "Querying username for userId: " + userId);
+        Cursor cursor = db.query(TABLE_NAME, new String[]{COL_USERNAME},
+                COL_ID + "=?", new String[]{userId}, null, null, null);
+        String username = null;
+        if (cursor.moveToFirst()) {
+            username = cursor.getString(cursor.getColumnIndexOrThrow(COL_USERNAME));
+            Log.d(TAG, "Found username: " + username + " for userId: " + userId);
+        } else {
+            Log.e(TAG, "No username found for userId: " + userId);
+            Cursor allUsers = db.query(TABLE_NAME, new String[]{COL_ID, COL_USERNAME},
+                    null, null, null, null, null);
+            while (allUsers.moveToNext()) {
+                String id = allUsers.getString(allUsers.getColumnIndexOrThrow(COL_ID));
+                String name = allUsers.getString(allUsers.getColumnIndexOrThrow(COL_USERNAME));
+                Log.d(TAG, "User in DB: id=" + id + ", username=" + name);
+            }
+            allUsers.close();
+        }
+        cursor.close();
+        return username;
+    }
+
+    public void checkDatabaseIntegrity() {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_NAME, new String[]{COL_ID, COL_USERNAME},
+                null, null, null, null, null);
+        while (cursor.moveToNext()) {
+            String id = cursor.getString(cursor.getColumnIndexOrThrow(COL_ID));
+            String username = cursor.getString(cursor.getColumnIndexOrThrow(COL_USERNAME));
+            if (id != null && id.matches(".*\\s+.*")) {
+                Log.w(TAG, "Found suspicious ID with whitespace: " + id);
+            }
+            Log.d(TAG, "User in DB: id=" + id + ", username=" + username);
+        }
+        cursor.close();
+    }
+
+    public void updateInvitationStatus(String invitationId, String status) {
+        SQLiteDatabase db = getRegisterDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_STATUS, status);
+        values.put(COL_IS_SYNCED_INV, 0); // 標記為未同步，觸發同步
+        int rowsAffected = db.update(TABLE_INVITATIONS, values, COL_INVITATION_ID + " = ?", new String[]{invitationId});
+        if (rowsAffected > 0) {
+            Log.d(TAG, "Updated invitation ID: " + invitationId + " to status: " + status);
+            syncInvitations(); // 同步到伺服器
+            // 立即刷新本地邀請狀態，確保 UI 反映最新狀態
+            notifyInvitationStatusChanged(); // 新增方法，通知 UI 更新
+        } else {
+            Log.e(TAG, "Failed to update invitation ID: " + invitationId);
+        }
+    }
+
+    // 新增方法，用於通知 UI 更新邀請狀態
+    private void notifyInvitationStatusChanged() {
+        // 這裡可以觸發一個廣播或回調，通知 UI 重新加載邀請列表
+        // 例如，使用 LocalBroadcastManager 或介面回調
+        Log.d(TAG, "Notifying UI of invitation status change");
     }
 
     public static class RegistrationResult {
@@ -207,7 +326,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                     uploadUserToServer(randomId, finalUsername, finalPassword, finalEmail);
                     Log.d(TAG, "User uploaded to server successfully");
                     updateSyncStatus(randomId, 1);
-                    // 在上傳成功後立即同步本地資料庫
                     syncDatabaseInternal();
                 } catch (IOException | JSONException e) {
                     Log.e(TAG, "Failed to upload user after registration: " + e.getMessage());
@@ -218,7 +336,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 }
             });
             try {
-                latch.await(); // 等待上傳和同步完成
+                latch.await();
             } catch (InterruptedException e) {
                 Log.e(TAG, "Interrupted while waiting for upload: " + e.getMessage());
             }
@@ -345,7 +463,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         });
 
         try {
-            latch.await(); // 等待同步完成
+            latch.await();
         } catch (InterruptedException e) {
             Log.e(TAG, "Interrupted while waiting for sync: " + e.getMessage());
             return false;
@@ -408,7 +526,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
         try (Response response = client.newCall(request).execute()) {
             String responseData = response.body().string();
-            Log.d(TAG, "Full fetch users response: " + responseData); // 記錄完整回應
+            Log.d(TAG, "Full fetch users response: " + responseData);
             if (!response.isSuccessful()) {
                 Log.e(TAG, "Failed to fetch users: " + response.code() + " - " + response.message());
                 throw new IOException("Fetch failed: " + response.code() + " - " + response.message());
@@ -508,6 +626,313 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         } finally {
             db.endTransaction();
             cursor.close();
+        }
+    }
+
+    public void addGroupInvitation(String groupName, String invitedUser) {
+        SQLiteDatabase db = getRegisterDatabase();
+
+        // 檢查 invitedUser 是否為有效的使用者名稱
+        String userId = getUserIdFromUsername(invitedUser);
+        if (userId == null) {
+            Log.e(TAG, "Invalid invitedUser: " + invitedUser + ", no userId found");
+            return;
+        }
+
+        // 檢查是否已存在相同的邀請
+        Cursor checkCursor = db.query(TABLE_INVITATIONS, new String[]{COL_STATUS},
+                COL_GROUP_NAME + " = ? AND " + COL_INVITED_USER + " = ?",
+                new String[]{groupName, invitedUser}, null, null, null);
+        if (checkCursor.moveToFirst()) {
+            String status = checkCursor.getString(checkCursor.getColumnIndexOrThrow(COL_STATUS));
+            checkCursor.close();
+            if ("pending".equals(status)) {
+                Log.d(TAG, "Pending invitation already exists for user: " + invitedUser + " to group: " + groupName);
+                return; // 已經有 pending 邀請，無需重複添加
+            } else {
+                // 更新現有記錄
+                ContentValues updateValues = new ContentValues();
+                updateValues.put(COL_STATUS, "pending");
+                updateValues.put(COL_IS_SYNCED_INV, 0);
+                db.update(TABLE_INVITATIONS, updateValues,
+                        COL_GROUP_NAME + " = ? AND " + COL_INVITED_USER + " = ?",
+                        new String[]{groupName, invitedUser});
+                Log.d(TAG, "Updated existing invitation for user: " + invitedUser + " to group: " + groupName);
+                syncInvitations();
+                return;
+            }
+        }
+        checkCursor.close();
+
+        // 生成唯一的 invitationId
+        String invitationId;
+        do {
+            invitationId = generateRandomId();
+            Cursor cursor = db.query(TABLE_INVITATIONS, new String[]{COL_INVITATION_ID},
+                    COL_INVITATION_ID + " = ?", new String[]{invitationId}, null, null, null);
+            if (cursor.getCount() == 0) {
+                cursor.close();
+                break;
+            }
+            cursor.close();
+        } while (true);
+
+        ContentValues values = new ContentValues();
+        values.put(COL_INVITATION_ID, invitationId);
+        values.put(COL_GROUP_NAME, groupName);
+        values.put(COL_INVITED_USER, invitedUser);
+        values.put(COL_STATUS, "pending");
+        values.put(COL_IS_SYNCED_INV, 0);
+
+        long result = db.insert(TABLE_INVITATIONS, null, values);
+        if (result == -1) {
+            Log.e(TAG, "Failed to add group invitation for user: " + invitedUser);
+        } else {
+            Log.d(TAG, "Group invitation added for user: " + invitedUser + " to group: " + groupName + ", invitationId: " + invitationId);
+            syncInvitations();
+        }
+    }
+
+    public List<Invitation> getPendingInvitations(String userId) {
+        syncInvitations(); // 確保最新狀態
+
+        String username = getUsernameFromUserId(userId);
+        if (username == null) {
+            Log.e(TAG, "Cannot retrieve username for userId: " + userId + ", returning empty invitation list");
+            return new ArrayList<>();
+        }
+
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_INVITATIONS,
+                new String[]{COL_INVITATION_ID, COL_GROUP_NAME, COL_INVITED_USER},
+                COL_INVITED_USER + "=? AND " + COL_STATUS + "=?",
+                new String[]{username, "pending"}, // 只返回 pending 狀態
+                null, null, null);
+
+        List<Invitation> invitations = new ArrayList<>();
+        while (cursor.moveToNext()) {
+            String invitationId = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITATION_ID));
+            String groupName = cursor.getString(cursor.getColumnIndexOrThrow(COL_GROUP_NAME));
+            String invitedUser = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITED_USER));
+            Log.d(TAG, "Found pending invitation: invitationId=" + invitationId + ", groupName=" + groupName + ", invitedUser=" + invitedUser);
+            invitations.add(new Invitation(invitationId, groupName));
+        }
+        cursor.close();
+        Log.d(TAG, "Pending invitations for userId " + userId + " (username: " + username + "): " + invitations.size());
+        return invitations;
+    }
+
+    public void syncInvitations() {
+        new Thread(() -> {
+            try {
+                // 先上傳本地未同步的邀請
+                uploadUnsyncedInvitations();
+
+                // 從伺服器拉取最新的邀請資料，並根據當前使用者過濾
+                String username = getUsernameFromUserId("1"); // 假設 hilda111 的 userId 是 1
+                if (username == null) {
+                    Log.e(TAG, "Cannot retrieve username for userId: 1, skipping sync");
+                    return;
+                }
+                String url = SERVER_URL + "/fetch_invitations.php?invited_user=" + username;
+                String response = fetchInvitationsFromServer(url);
+                JSONObject jsonResponse = new JSONObject(response);
+                if (jsonResponse.getBoolean("success")) {
+                    JSONArray data = jsonResponse.getJSONArray("data");
+                    SQLiteDatabase db = getRegisterDatabase();
+                    db.beginTransaction();
+                    try {
+                        for (int i = 0; i < data.length(); i++) {
+                            JSONObject invitation = data.getJSONObject(i);
+                            String invitationId = invitation.getString("invitation_id");
+                            String groupName = invitation.getString("group_name");
+                            String invitedUser = invitation.getString("invited_user");
+                            String status = invitation.getString("status");
+
+                            // 檢查本地是否已有該邀請
+                            Cursor cursor = db.query(TABLE_INVITATIONS,
+                                    new String[]{COL_INVITATION_ID},
+                                    COL_INVITATION_ID + " = ?",
+                                    new String[]{invitationId},
+                                    null, null, null);
+                            boolean exists = cursor.moveToFirst();
+                            cursor.close();
+
+                            ContentValues values = new ContentValues();
+                            values.put(COL_INVITATION_ID, invitationId);
+                            values.put(COL_GROUP_NAME, groupName);
+                            values.put(COL_INVITED_USER, invitedUser);
+                            values.put(COL_STATUS, status);
+                            values.put(COL_IS_SYNCED_INV, 1);
+
+                            if (exists) {
+                                db.update(TABLE_INVITATIONS, values, COL_INVITATION_ID + " = ?", new String[]{invitationId});
+                                Log.d(TAG, "Updated invitation: " + invitationId);
+                            } else {
+                                db.insert(TABLE_INVITATIONS, null, values);
+                                Log.d(TAG, "Inserted new invitation: " + invitationId);
+                            }
+                        }
+                        db.setTransactionSuccessful();
+                    } finally {
+                        db.endTransaction();
+                    }
+                }
+                Log.d(TAG, "Invitation sync completed");
+            } catch (Exception e) {
+                Log.e(TAG, "Error syncing invitations: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private String fetchInvitationsFromServer(String url) throws IOException {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Failed to fetch invitations: " + response.code() + " - " + response.message());
+            }
+            return response.body().string();
+        }
+    }
+
+    private void uploadUnsyncedInvitations() throws IOException, JSONException {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_INVITATIONS, null, COL_IS_SYNCED_INV + " = 0", null, null, null, null);
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
+        db.beginTransaction();
+        try {
+            while (cursor.moveToNext()) {
+                String invitationId = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITATION_ID));
+                String groupName = cursor.getString(cursor.getColumnIndexOrThrow(COL_GROUP_NAME));
+                String invitedUser = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITED_USER));
+                String status = cursor.getString(cursor.getColumnIndexOrThrow(COL_STATUS));
+
+                if (invitationId == null || groupName == null || invitedUser == null || status == null) {
+                    Log.e(TAG, "Invalid invitation data: invitationId=" + invitationId + ", groupName=" + groupName + ", invitedUser=" + invitedUser + ", status=" + status);
+                    continue;
+                }
+
+                JSONObject jsonBody = new JSONObject();
+                jsonBody.put(COL_INVITATION_ID, invitationId);
+                jsonBody.put(COL_GROUP_NAME, groupName);
+                jsonBody.put(COL_INVITED_USER, invitedUser);
+                jsonBody.put(COL_STATUS, status);
+
+                RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
+                Request request = new Request.Builder()
+                        .url(SERVER_URL + "/sync_invitations.php")
+                        .post(requestBody)
+                        .build();
+
+                try (Response response = client.newCall(request).execute()) {
+                    if (response.isSuccessful()) {
+                        String responseData = response.body().string();
+                        JSONObject jsonResponse = new JSONObject(responseData);
+                        if (jsonResponse.getBoolean("success")) {
+                            Log.d(TAG, "Uploaded invitation with ID: " + invitationId);
+                            ContentValues values = new ContentValues();
+                            values.put(COL_IS_SYNCED_INV, 1);
+                            db.update(TABLE_INVITATIONS, values, COL_INVITATION_ID + " = ?", new String[]{invitationId});
+                        } else {
+                            Log.e(TAG, "Server rejected invitation with ID: " + invitationId + ", message: " + jsonResponse.getString("message"));
+                            throw new IOException(jsonResponse.getString("message"));
+                        }
+                    } else {
+                        Log.e(TAG, "Failed to upload invitation with ID: " + invitationId + ": " + response.code() + " - " + response.message());
+                        throw new IOException("Upload failed: " + response.code() + " - " + response.message());
+                    }
+                }
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+            cursor.close();
+        }
+    }
+
+    private void fetchAndMergeInvitationsFromServer() throws IOException, JSONException {
+        if (!isNetworkAvailable()) {
+            Log.w(TAG, "Network unavailable, skipping invitation download");
+            showToast("Network unavailable, invitation download will retry later");
+            return;
+        }
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
+        String fullUrl = SERVER_URL + "/fetch_invitations.php";
+        Log.d(TAG, "Fetching invitations from: " + fullUrl);
+
+        Request request = new Request.Builder()
+                .url(fullUrl)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            String responseData = response.body().string();
+            Log.d(TAG, "Full fetch invitations response: " + responseData);
+            if (!response.isSuccessful()) {
+                Log.e(TAG, "Failed to fetch invitations: " + response.code() + " - " + response.message());
+                throw new IOException("Fetch failed: " + response.code() + " - " + response.message());
+            }
+
+            JSONObject jsonResponse = new JSONObject(responseData);
+            if (jsonResponse.getBoolean("success")) {
+                JSONArray invitations = jsonResponse.getJSONArray("data");
+                SQLiteDatabase db = getRegisterDatabase();
+                db.beginTransaction();
+                try {
+                    for (int i = 0; i < invitations.length(); i++) {
+                        JSONObject invitation = invitations.getJSONObject(i);
+                        String invitationId = invitation.getString(COL_INVITATION_ID);
+                        String groupName = invitation.getString(COL_GROUP_NAME);
+                        String invitedUser = invitation.getString(COL_INVITED_USER);
+                        String status = invitation.getString(COL_STATUS);
+
+                        Cursor cursor = db.query(TABLE_INVITATIONS,
+                                new String[]{COL_INVITED_USER},
+                                COL_INVITATION_ID + "=?",
+                                new String[]{invitationId},
+                                null, null, null);
+                        boolean hasLocalRecord = cursor.moveToFirst();
+                        cursor.close();
+
+                        if (hasLocalRecord) {
+                            Log.d(TAG, "Skipping merge for invitation with ID: " + invitationId + " (local record exists)");
+                            continue;
+                        }
+
+                        ContentValues values = new ContentValues();
+                        values.put(COL_INVITATION_ID, invitationId);
+                        values.put(COL_GROUP_NAME, groupName);
+                        values.put(COL_INVITED_USER, invitedUser);
+                        values.put(COL_STATUS, status);
+                        values.put(COL_IS_SYNCED_INV, 1);
+
+                        db.insertWithOnConflict(TABLE_INVITATIONS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+                        Log.d(TAG, "Merged invitation with ID: " + invitationId);
+                    }
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
+                }
+            } else {
+                Log.e(TAG, "Server returned failure: " + jsonResponse.getString("message"));
+                throw new IOException(jsonResponse.getString("message"));
+            }
         }
     }
 
