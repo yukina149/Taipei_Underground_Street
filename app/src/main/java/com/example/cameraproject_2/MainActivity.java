@@ -7,11 +7,14 @@ import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_INVITATION_
 import static com.example.cameraproject_2.RegisterDatabaseHelper.REGISTER_DB_NAME;
 import static com.example.cameraproject_2.RegisterDatabaseHelper.TABLE_INVITATIONS;
 
+import static org.opencv.android.NativeCameraView.TAG;
+
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -170,6 +173,20 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             Toast.makeText(this, "Database initialization failed", Toast.LENGTH_LONG).show();
             finish();
             return;
+        }
+        // 找到 NavigationView
+        navigationView = findViewById(R.id.nav_view); // 根據你的 XML ID 修改
+        if (navigationView == null) {
+            Log.e(TAG, "NavigationView not found");
+            return;
+        }
+        // 註冊 BroadcastReceiver
+        IntentFilter filter = new IntentFilter("com.example.cameraproject_2.INVITATION_UPDATED");
+        //registerReceiver(new RegisterDatabaseHelper.InvitationUpdateReceiver(), filter);
+
+        // 檢查 Intent 是否帶有更新標記
+        if (getIntent().getBooleanExtra("UPDATE_MENU", false)) {
+            updateNavigationMenu();
         }
 
         bigmap = findViewById(R.id.bigmap);
@@ -353,9 +370,15 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     @Override
     protected void updateNavigationMenu() {
-        if (navigationView == null) {
-            Log.e("MainActivity", "navigationView is null");
-            return;
+        if (navigationView != null) {
+            Menu menu = navigationView.getMenu();
+            menu.clear(); // 清空舊菜單
+            SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+            Set<String> groupNames = prefs.getStringSet("groupNames", new HashSet<>());
+            for (String groupName : groupNames) {
+                menu.add(groupName); // 動態添加群組
+            }
+            Log.d(TAG, "Navigation menu updated with groups: " + groupNames.toString());
         }
 
         Menu navMenu = navigationView.getMenu();

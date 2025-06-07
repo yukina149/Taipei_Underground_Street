@@ -14,7 +14,10 @@ import android.net.NetworkInfo;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Menu;
 import android.widget.Toast;
+
+import com.google.android.material.navigation.NavigationView;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -173,7 +176,8 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                     COL_INVITATION_ID + " TEXT PRIMARY KEY, " +
                     COL_GROUP_NAME + " TEXT NOT NULL, " +
                     COL_INVITED_USER + " TEXT NOT NULL, " +
-                    COL_STATUS + " TEXT NOT NULL)";
+                    COL_STATUS + " TEXT NOT NULL, " +
+                    COL_IS_SYNCED_INV + " INTEGER DEFAULT 0)"; // 確保與 onCreate 一致
             db.execSQL(createInvitationsTable);
             Log.d(TAG, "Created GroupInvitations table during upgrade");
         }
@@ -197,8 +201,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             db.execSQL(createMessagesTable);
             Log.d(TAG, "Added messages table during upgrade to version 6");
         }
-        // 移除 onCreate 呼叫，因為它會覆蓋現有表結構
-        // onCreate(db);
     }
 
     public SQLiteDatabase getRegisterDatabase() {
@@ -288,6 +290,9 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put(COL_STATUS, status);
         values.put(COL_IS_SYNCED_INV, 0);
+        SharedPreferences prefs = context.getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+        Set<String> groupNames = prefs.getStringSet("groupNames", new HashSet<>());
+        Log.d(TAG, "Current groupNames after update: " + groupNames.toString());
         int rowsAffected = db.update(TABLE_INVITATIONS, values, COL_INVITATION_ID + " = ?", new String[]{invitationId});
         if (rowsAffected > 0) {
             Log.d(TAG, "Updated invitation ID: " + invitationId + " to status: " + status);
@@ -321,9 +326,27 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         String groupName = null;
         if (cursor.moveToFirst()) {
             groupName = cursor.getString(cursor.getColumnIndexOrThrow(COL_GROUP_NAME));
+            Log.d(TAG, "Retrieved groupName: " + groupName + " for invitationId: " + invitationId);
+        } else {
+            Log.e(TAG, "No groupName found for invitationId: " + invitationId);
         }
         cursor.close();
         return groupName;
+    }
+    public class InvitationUpdateReceiver extends BroadcastReceiver {
+        private static final String TAG = "InvitationUpdateReceiver";
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if ("com.example.cameraproject_2.INVITATION_UPDATED".equals(intent.getAction())) {
+                Log.d(TAG, "Received INVITATION_UPDATED broadcast");
+                // 啟動或通知 Activity 更新 UI
+                Intent updateIntent = new Intent(context, MainActivity.class); // 替換為你的主 Activity
+                updateIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                updateIntent.putExtra("UPDATE_MENU", true);
+                context.startActivity(updateIntent);
+            }
+        }
     }
 
     public void notifyInvitationStatusChanged() {
@@ -369,13 +392,14 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                                 String invitedUser = invitation.getString("invited_user");
                                 String status = invitation.getString("status");
 
-                                Cursor cursor = db.query(TABLE_INVITATIONS,
+                                // 檢查是否已有相同 (group_name, invited_user) 的記錄
+                                Cursor checkCursor = db.query(TABLE_INVITATIONS,
                                         new String[]{COL_INVITATION_ID},
-                                        COL_INVITATION_ID + " = ?",
-                                        new String[]{invitationId},
+                                        COL_GROUP_NAME + " = ? AND " + COL_INVITED_USER + " = ?",
+                                        new String[]{groupName, invitedUser},
                                         null, null, null);
-                                boolean exists = cursor.moveToFirst();
-                                cursor.close();
+                                boolean exists = checkCursor.moveToFirst();
+                                checkCursor.close();
 
                                 ContentValues values = new ContentValues();
                                 values.put(COL_INVITATION_ID, invitationId);
@@ -386,7 +410,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
                                 if (exists) {
                                     db.update(TABLE_INVITATIONS, values, COL_INVITATION_ID + " = ?", new String[]{invitationId});
-                                    Log.d(TAG, "Updated invitation: " + invitationId);
+                                    Log.d(TAG, "Updated existing invitation: " + invitationId);
                                 } else {
                                     db.insertWithOnConflict(TABLE_INVITATIONS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
                                     Log.d(TAG, "Inserted new invitation: " + invitationId);
@@ -827,6 +851,13 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public List<Invitation> getPendingInvitations(String userId) {
+        String username = getUsernameFromUserId(userId);
+        if (username == null) {
+            Log.e(TAG, "Cannot retrieve username for userId: " + userId + ", returning empty invitation list");
+            return new ArrayList<>();
+        }
+
+        // 先嘗試同步
         syncInvitations(context, new SyncCallback() {
             @Override
             public void onSyncComplete(boolean success) {
@@ -836,12 +867,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             }
         });
 
-        String username = getUsernameFromUserId(userId);
-        if (username == null) {
-            Log.e(TAG, "Cannot retrieve username for userId: " + userId + ", returning empty invitation list");
-            return new ArrayList<>();
-        }
-
+        // 從本地資料庫查詢
         SQLiteDatabase db = getRegisterDatabase();
         Cursor cursor = db.query(TABLE_INVITATIONS,
                 new String[]{COL_INVITATION_ID, COL_GROUP_NAME, COL_INVITED_USER, COL_STATUS},
