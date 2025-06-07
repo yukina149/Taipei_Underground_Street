@@ -3,6 +3,7 @@ package com.example.cameraproject_2;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -13,23 +14,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import org.json.JSONObject;
-
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import org.json.JSONException;
+import java.util.concurrent.CountDownLatch;
 
 public class CreateGroupActivity extends AppCompatActivity {
-
     private EditText editTextGroupName;
     private EditText editTextMemberId;
     private Button buttonSearchMember;
@@ -109,97 +100,71 @@ public class CreateGroupActivity extends AppCompatActivity {
 
             saveGroup(groupName, selectedMembers);
 
+            CountDownLatch latch = new CountDownLatch(selectedMembers.size() - 1);
             for (String member : selectedMembers) {
                 if (!member.equals(currentUser)) {
                     Log.d("CreateGroupActivity", "Attempting to add invitation for user: " + member + " to group: " + groupName);
-                    dbHelper.addGroupInvitation(groupName, member);
-                    Log.d("CreateGroupActivity", "Invitation added for user: " + member + ", will be synced");
+                    dbHelper.addGroupInvitation(groupName, member, new RegisterDatabaseHelper.SyncCallback() {
+                        @Override
+                        public void onSyncComplete(boolean success) {
+                            if (success) {
+                                Log.d("CreateGroupActivity", "Invitation synced for user: " + member);
+                            } else {
+                                Log.e("CreateGroupActivity", "Invitation sync failed for user: " + member);
+                            }
+                            latch.countDown();
+                        }
+                    });
+                } else {
+                    latch.countDown();
                 }
             }
 
-            Toast.makeText(this, "群組創建成功，已發送邀請", Toast.LENGTH_SHORT).show();
-
-            Intent intent = new Intent(CreateGroupActivity.this, Chatroom.class);
-            intent.putExtra("groupName", groupName);
-            intent.putStringArrayListExtra("members", new ArrayList<>(selectedMembers));
-            startActivity(intent);
-            finish();
+            new Thread(() -> {
+                try {
+                    latch.await();
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "群組創建成功，已發送邀請", Toast.LENGTH_SHORT).show();
+                        Intent intent = new Intent(CreateGroupActivity.this, Chatroom.class);
+                        intent.putExtra("groupName", groupName);
+                        intent.putStringArrayListExtra("members", new ArrayList<>(selectedMembers));
+                        startActivity(intent);
+                        finish();
+                    });
+                } catch (InterruptedException e) {
+                    Log.e("CreateGroupActivity", "Interrupted while waiting for invitations: " + e.getMessage());
+                    runOnUiThread(() -> Toast.makeText(this, "群組創建失敗", Toast.LENGTH_SHORT).show());
+                }
+            }).start();
         });
     }
 
     private void saveGroup(String groupName, List<String> members) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
-        Set<String> newGroupNames = new HashSet<>(groupNames);
-        if (!newGroupNames.contains(groupName)) {
-            newGroupNames.add(groupName);
-            editor.putStringSet("groupNames", newGroupNames);
-            Log.d("CreateGroupActivity", "Added group: " + groupName);
-        } else {
-            Log.d("CreateGroupActivity", "Group " + groupName + " already exists");
-        }
-
-        String membersString = String.join(",", members);
-        editor.putString(groupName + "_members", membersString);
+        groupNames.add(groupName);
+        editor.putStringSet("groupNames", groupNames);
+        editor.putString(groupName + "_members", String.join(",", members));
         editor.apply();
-        Log.d("CreateGroupActivity", "Saved members for " + groupName + ": " + membersString);
-
-        // 上傳群組資料到伺服器
-        new Thread(() -> {
-            try {
-                uploadGroupToServer(groupName, membersString);
-                Log.d("CreateGroupActivity", "Group uploaded to server: " + groupName);
-            } catch (Exception e) {
-                Log.e("CreateGroupActivity", "Failed to upload group to server: " + e.getMessage());
-                runOnUiThread(() -> Toast.makeText(this, "無法上傳群組到伺服器", Toast.LENGTH_SHORT).show());
-            }
-        }).start();
-    }
-    private void uploadGroupToServer(String groupName, String members) throws IOException, JSONException {
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .build();
-
-        JSONObject jsonBody = new JSONObject();
-        jsonBody.put("group_name", groupName);
-        jsonBody.put("members", members);
-
-        String url = "http://192.168.10.15/android_studio/create_group.php";
-        RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
-        Request request = new Request.Builder()
-                .url(url)
-                .post(requestBody)
-                .build();
-
-        try (Response response = client.newCall(request).execute()) {
-            String responseData = response.body().string();
-            Log.d("CreateGroupActivity", "Server response: " + responseData);
-            if (!response.isSuccessful()) {
-                throw new IOException("Failed to upload group: " + response.code() + " - " + response.message());
-            }
-
-            JSONObject jsonResponse = new JSONObject(responseData);
-            if (!jsonResponse.getBoolean("success")) {
-                throw new IOException(jsonResponse.getString("message"));
-            }
-        }
+        Log.d("CreateGroupActivity", "Saved group: " + groupName + " with members: " + String.join(", ", members));
     }
 
-    private User getUserById(String memberId) {
-        Cursor cursor = dbHelper.getRegisterDatabase().query(
-                RegisterDatabaseHelper.TABLE_NAME,
-                new String[]{"id", RegisterDatabaseHelper.COL_USERNAME},
-                "id = ?",
-                new String[]{memberId},
-                null, null, null
-        );
+    private User getUserById(String userId) {
+        SQLiteDatabase db = dbHelper.getRegisterDatabase();
+        Cursor cursor = db.query(RegisterDatabaseHelper.TABLE_NAME,
+                new String[]{RegisterDatabaseHelper.COL_ID, RegisterDatabaseHelper.COL_USERNAME},
+                RegisterDatabaseHelper.COL_ID + "=?",
+                new String[]{userId},
+                null, null, null);
 
         User user = null;
         if (cursor.moveToFirst()) {
-            String id = cursor.getString(cursor.getColumnIndexOrThrow("id"));
+            String id = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_ID));
             String username = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_USERNAME));
             user = new User(id, username);
+            Log.d("CreateGroupActivity", "Found user: " + id + ", " + username);
+        } else {
+            Log.e("CreateGroupActivity", "No user found with ID: " + userId);
         }
         cursor.close();
         return user;

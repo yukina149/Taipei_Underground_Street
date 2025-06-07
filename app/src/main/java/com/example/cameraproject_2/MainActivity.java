@@ -2,7 +2,10 @@ package com.example.cameraproject_2;
 
 import static androidx.activity.result.ActivityResultCallerKt.registerForActivityResult;
 import static com.example.cameraproject_2.PictureDatabaseHelper.PICTURE_DB_NAME;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_GROUP_NAME;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_INVITATION_ID;
 import static com.example.cameraproject_2.RegisterDatabaseHelper.REGISTER_DB_NAME;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.TABLE_INVITATIONS;
 
 import android.Manifest;
 import android.app.NotificationChannel;
@@ -11,6 +14,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -119,6 +123,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private Handler handler = new Handler();
     private Runnable invitationChecker;
+    private RegisterDatabaseHelper dbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -363,7 +368,57 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         for (String groupName : groupNames) {
             navMenu.add(Menu.NONE, Menu.NONE, order++, groupName)
                     .setIcon(R.drawable.store_icon);
+            Log.d("MainActivity", "Added group to menu: " + groupName); // 添加日誌確認
         }
+    }
+
+    // 在 MainActivity.java 中（假設）
+    public void onInvitationAccepted(String invitationId) {
+        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
+        dbHelper.updateInvitationStatus(invitationId, "accepted");
+        dbHelper.syncInvitations(MainActivity.this, new RegisterDatabaseHelper.SyncCallback() { // 添加 MainActivity.this 作為 Context
+            @Override
+            public void onSyncComplete(boolean success) {
+                runOnUiThread(() -> {
+                    if (success) {
+                        String groupName = getGroupNameFromInvitation(invitationId); // 實現此方法
+                        if (groupName != null) {
+                            SharedPreferences sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+                            String membersString = sharedPreferences.getString(groupName + "_members", "");
+                            List<String> members = new ArrayList<>();
+                            if (!membersString.isEmpty()) {
+                                String[] membersArray = membersString.split(",");
+                                for (String member : membersArray) {
+                                    members.add(member.trim());
+                                }
+                            }
+                            Intent intent = new Intent(MainActivity.this, Chatroom.class);
+                            intent.putExtra("groupName", groupName);
+                            intent.putStringArrayListExtra("members", new ArrayList<>(members));
+                            startActivity(intent);
+                        } else {
+                            Log.e("MainActivity", "Failed to get group name for invitation ID: " + invitationId);
+                            Toast.makeText(MainActivity.this, "無法找到群組", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private String getGroupNameFromInvitation(String invitationId) {
+        SQLiteDatabase db = dbHelper.getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_INVITATIONS,
+                new String[]{COL_GROUP_NAME},
+                COL_INVITATION_ID + " = ?",
+                new String[]{invitationId},
+                null, null, null);
+        String groupName = null;
+        if (cursor.moveToFirst()) {
+            groupName = cursor.getString(cursor.getColumnIndexOrThrow(COL_GROUP_NAME));
+        }
+        cursor.close();
+        return groupName;
     }
 
     @Override
@@ -810,9 +865,17 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             @Override
             public void run() {
                 // 先同步資料庫
-                registerDbHelper.syncInvitations();
-                // 檢查是否有新邀請
-                checkInvitations();
+                registerDbHelper.syncInvitations(MainActivity.this, new RegisterDatabaseHelper.SyncCallback() { // 添加 MainActivity.this 作為 Context
+                    @Override
+                    public void onSyncComplete(boolean success) {
+                        if (!success) {
+                            Log.e("MainActivity", "Invitation sync failed");
+                        } else {
+                            // 檢查是否有新邀請
+                            checkInvitations();
+                        }
+                    }
+                });
                 handler.postDelayed(this, CHECK_INTERVAL);
             }
         };

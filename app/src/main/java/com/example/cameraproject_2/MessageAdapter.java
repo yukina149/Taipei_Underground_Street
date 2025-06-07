@@ -20,7 +20,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
     @Override
     public MessageViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(parent.getContext())
-                .inflate(android.R.layout.simple_list_item_1, parent, false);
+                .inflate(R.layout.message_item, parent, false);
         return new MessageViewHolder(view);
     }
 
@@ -39,7 +39,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
 
         MessageViewHolder(View itemView) {
             super(itemView);
-            textView = itemView.findViewById(android.R.id.text1);
+            textView = itemView.findViewById(R.id.textViewMessage);
         }
     }
 }
