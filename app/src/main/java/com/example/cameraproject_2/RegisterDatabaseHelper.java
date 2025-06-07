@@ -115,8 +115,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 COL_GROUP_NAME + " TEXT NOT NULL, " +
                 COL_INVITED_USER + " TEXT NOT NULL, " +
                 COL_STATUS + " TEXT NOT NULL, " +
-                COL_IS_SYNCED_INV + " INTEGER DEFAULT 0, " +
-                "UNIQUE(" + COL_GROUP_NAME + ", " + COL_INVITED_USER + "))";
+                COL_IS_SYNCED_INV + " INTEGER DEFAULT 0)";
         db.execSQL(createInvitationsTable);
         Log.d(TAG, "Database created with table: " + TABLE_INVITATIONS);
 
@@ -174,8 +173,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                     COL_INVITATION_ID + " TEXT PRIMARY KEY, " +
                     COL_GROUP_NAME + " TEXT NOT NULL, " +
                     COL_INVITED_USER + " TEXT NOT NULL, " +
-                    COL_STATUS + " TEXT NOT NULL, " +
-                    "UNIQUE(" + COL_GROUP_NAME + ", " + COL_INVITED_USER + "))";
+                    COL_STATUS + " TEXT NOT NULL)";
             db.execSQL(createInvitationsTable);
             Log.d(TAG, "Created GroupInvitations table during upgrade");
         }
@@ -199,7 +197,8 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             db.execSQL(createMessagesTable);
             Log.d(TAG, "Added messages table during upgrade to version 6");
         }
-        onCreate(db);
+        // 移除 onCreate 呼叫，因為它會覆蓋現有表結構
+        // onCreate(db);
     }
 
     public SQLiteDatabase getRegisterDatabase() {
