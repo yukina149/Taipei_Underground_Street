@@ -888,6 +888,17 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         Log.d(TAG, "Pending invitations for userId " + userId + " (username: " + username + "): " + invitations.size());
         return invitations;
     }
+    // 在 RegisterDatabaseHelper 中添加
+    public interface OnMessageInsertedListener {
+        void onMessageInserted(String groupName);
+    }
+
+    private OnMessageInsertedListener messageListener;
+
+    public void setOnMessageInsertedListener(OnMessageInsertedListener listener) {
+        this.messageListener = listener;
+    }
+
 
     public void insertMessage(String messageId, String groupName, String sender, String message, long timestamp) {
         SQLiteDatabase db = getRegisterDatabase();
@@ -897,16 +908,18 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         values.put(COL_SENDER, sender);
         values.put(COL_MESSAGE, message);
         values.put(COL_TIMESTAMP, timestamp);
-        values.put(COL_IS_SYNCED_MSG, 1);
+        values.put(COL_IS_SYNCED_MSG, 0);
 
         long result = db.insertWithOnConflict(TABLE_MESSAGES, null, values, SQLiteDatabase.CONFLICT_REPLACE);
         if (result != -1) {
             Log.d(TAG, "Message inserted into local database: " + messageId);
+            if (messageListener != null && groupName != null) {
+                messageListener.onMessageInserted(groupName); // 通知監聽器
+            }
         } else {
             Log.e(TAG, "Failed to insert message into local database: " + messageId);
         }
     }
-
     private String fetchInvitationsFromServer(String url) throws IOException {
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -924,6 +937,20 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             return response.body().string();
         }
     }
+
+    public void updateMessageSyncStatus(String messageId, int syncStatus) {
+        SQLiteDatabase db = getRegisterDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_IS_SYNCED_MSG, syncStatus);
+
+        int rowsUpdated = db.update(TABLE_MESSAGES, values, COL_MESSAGE_ID + " = ?", new String[]{messageId});
+        if (rowsUpdated > 0) {
+            Log.d(TAG, "Updated sync status for messageId: " + messageId + " to " + syncStatus);
+        } else {
+            Log.e(TAG, "Failed to update sync status for messageId: " + messageId);
+        }
+    }
+
 
     private void uploadUnsyncedInvitations() throws IOException, JSONException {
         SQLiteDatabase db = getRegisterDatabase();

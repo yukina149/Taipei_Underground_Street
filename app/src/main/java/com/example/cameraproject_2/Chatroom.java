@@ -158,6 +158,14 @@ public class Chatroom extends AppCompatActivity {
             finish();
             return;
         }
+        dbHelper.setOnMessageInsertedListener(groupName1 -> {
+            if (groupName1 != null && groupName1.equals(groupName)) {
+                runOnUiThread(() -> {
+                    loadMessagesFromDatabase();
+                    Log.d("Chatroom", "Message inserted for group: " + groupName1 + ", UI reloaded");
+                });
+            }
+        });
 
         currentUserId = sharedPreferences.getString("userId", null);
         if (currentUserId == null) {
@@ -335,11 +343,17 @@ public class Chatroom extends AppCompatActivity {
             Toast.makeText(this, "Message cannot be empty", Toast.LENGTH_SHORT).show();
             return;
         }
-        sendMessageToServer(groupName, currentUsername, message);
+        String messageId = dbHelper.generateRandomId(); // 生成臨時 messageId
+        long timestamp = System.currentTimeMillis();
+        if (dbHelper != null) {
+            dbHelper.insertMessage(messageId, groupName, currentUsername, message, timestamp); // 立即插入本地
+            loadMessagesFromDatabase(); // 立即更新 UI
+        }
+        sendMessageToServer(groupName, currentUsername, message, messageId, timestamp); // 傳送至伺服器
         editTextMessage.setText("");
     }
 
-    private void sendMessageToServer(String groupName, String sender, String message) {
+    private void sendMessageToServer(String groupName, String sender, String message, String messageId, long timestamp) {
         executorService.execute(() -> {
             OkHttpClient client = new OkHttpClient();
             JSONObject jsonBody = new JSONObject();
@@ -347,6 +361,8 @@ public class Chatroom extends AppCompatActivity {
                 jsonBody.put("group_name", groupName);
                 jsonBody.put("sender", sender);
                 jsonBody.put("message", message);
+                jsonBody.put("message_id", messageId);
+                jsonBody.put("timestamp", timestamp);
 
                 RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
                 Request request = new Request.Builder()
@@ -357,37 +373,22 @@ public class Chatroom extends AppCompatActivity {
                 try (Response response = client.newCall(request).execute()) {
                     if (response.isSuccessful()) {
                         String responseData = response.body() != null ? response.body().string() : "";
-                        if (!responseData.isEmpty()) {
-                            JSONObject jsonResponse = new JSONObject(responseData);
-                            if (jsonResponse.has("success") && jsonResponse.getBoolean("success")) {
-                                String messageId = jsonResponse.has("message_id") ? jsonResponse.getString("message_id") : "";
-                                if (!messageId.isEmpty()) {
-                                    Log.d("Chatroom", "Message sent successfully, ID: " + messageId);
-                                    if (dbHelper != null) {
-                                        dbHelper.insertMessage(messageId, groupName, sender, message, System.currentTimeMillis());
-                                    }
-                                    // 即時加載所有訊息
-                                    runOnUiThread(this::loadMessagesFromDatabase);
-                                } else {
-                                    runOnUiThread(() -> Toast.makeText(Chatroom.this, "No message ID received", Toast.LENGTH_SHORT).show());
-                                    Log.e("Chatroom", "No message_id in response");
-                                }
-                            } else {
-                                String errorMessage = jsonResponse.has("message") ? jsonResponse.getString("message") : "Unknown error";
-                                runOnUiThread(() -> Toast.makeText(Chatroom.this, "Failed to send message: " + errorMessage, Toast.LENGTH_SHORT).show());
-                                Log.e("Chatroom", "Server reported failure: " + errorMessage);
+                        JSONObject jsonResponse = new JSONObject(responseData);
+                        if (jsonResponse.has("success") && jsonResponse.getBoolean("success")) {
+                            Log.d("Chatroom", "Message uploaded successfully, ID: " + messageId + ", Response: " + responseData);
+                            // 伺服器確認後更新本地同步狀態（可選）
+                            if (dbHelper != null) {
+                                dbHelper.updateMessageSyncStatus(messageId, 1);
                             }
                         } else {
-                            runOnUiThread(() -> Toast.makeText(Chatroom.this, "Empty server response", Toast.LENGTH_SHORT).show());
-                            Log.e("Chatroom", "Empty response from server");
+                            String errorMessage = jsonResponse.has("message") ? jsonResponse.getString("message") : "Unknown error";
+                            Log.e("Chatroom", "Server reported failure: " + errorMessage + ", Response: " + responseData);
                         }
                     } else {
-                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "Server error: " + response.code(), Toast.LENGTH_SHORT).show());
-                        Log.e("Chatroom", "Server error: " + response.code());
+                        Log.e("Chatroom", "Server error: " + response.code() + ", Response: " + response.body().string());
                     }
                 }
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(Chatroom.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
                 Log.e("Chatroom", "Error sending message: " + e.getMessage());
             }
         });
@@ -407,7 +408,7 @@ public class Chatroom extends AppCompatActivity {
     private void startMessagePolling() {
         executorService.execute(() -> {
             OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(15, TimeUnit.SECONDS) // 增加超時時間
+                    .connectTimeout(15, TimeUnit.SECONDS)
                     .readTimeout(15, TimeUnit.SECONDS)
                     .build();
             while (isPollingActive) {
@@ -422,44 +423,37 @@ public class Chatroom extends AppCompatActivity {
                             JSONObject jsonResponse = new JSONObject(responseData);
                             if (jsonResponse.getBoolean("success")) {
                                 JSONArray data = jsonResponse.getJSONArray("data");
-                                boolean updated = false;
-                                for (int i = 0; i < data.length(); i++) {
-                                    JSONObject messageObj = data.getJSONObject(i);
-                                    String messageId = messageObj.getString("message_id");
-                                    String sender = messageObj.has("sender") ? messageObj.getString("sender") : "Unknown";
-                                    String messageText = messageObj.has("message") ? messageObj.getString("message") : "";
-                                    long timestamp = messageObj.has("timestamp") ? messageObj.getLong("timestamp") : System.currentTimeMillis();
+                                if (data.length() > 0) {
+                                    for (int i = 0; i < data.length(); i++) {
+                                        JSONObject messageObj = data.getJSONObject(i);
+                                        String messageId = messageObj.getString("message_id");
+                                        String sender = messageObj.has("sender") ? messageObj.getString("sender") : "Unknown";
+                                        String messageText = messageObj.has("message") ? messageObj.getString("message") : "";
+                                        long timestamp = messageObj.has("timestamp") ? messageObj.getLong("timestamp") : System.currentTimeMillis();
 
-                                    if (!messageId.equals(lastMessageId)) {
-                                        String fullMessage = sender + ": " + messageText + " (" + formatTimestamp(timestamp) + ")";
-                                        runOnUiThread(() -> {
-                                            if (!messageList.contains(fullMessage)) { // 避免重複添加
-                                                updateMessageList(fullMessage);
+                                        if (!messageId.equals(lastMessageId)) {
+                                            if (dbHelper != null) {
+                                                dbHelper.insertMessage(messageId, groupName, sender, messageText, timestamp);
                                             }
-                                        });
-                                        lastMessageId = messageId;
-                                        updated = true;
+                                            lastMessageId = messageId; // 更新到最新 messageId
+                                        }
                                     }
                                 }
-                                if (!updated && data.length() > 0) {
-                                    runOnUiThread(this::loadMessagesFromDatabase); // 確保顯示所有訊息
-                                }
+                            } else {
+                                Log.w("Chatroom", "Polling response not successful: " + responseData);
                             }
                         } catch (JSONException e) {
-                            Log.e("Chatroom", "JSON parse error polling messages: " + e.getMessage() + ", Response: " + responseData);
-                            runOnUiThread(this::loadMessagesFromDatabase);
+                            Log.e("Chatroom", "JSON parse error: " + e.getMessage() + ", Response: " + responseData);
                         }
                     } else {
-                        Log.e("Chatroom", "Failed to poll messages: " + response.code() + ", Response: " + (response.body() != null ? response.body().string() : "No body"));
-                        runOnUiThread(this::loadMessagesFromDatabase);
+                        Log.e("Chatroom", "Polling failed with code: " + response.code());
                     }
                 } catch (IOException e) {
-                    Log.e("Chatroom", "IO error polling messages: " + e.getMessage());
-                    runOnUiThread(this::loadMessagesFromDatabase);
+                    Log.e("Chatroom", "IO error: " + e.getMessage());
                 }
 
                 try {
-                    Thread.sleep(2000); // 縮短為 2 秒間隔
+                    Thread.sleep(500); // 減少到 500 毫秒
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -484,7 +478,7 @@ public class Chatroom extends AppCompatActivity {
                         RegisterDatabaseHelper.COL_MESSAGE, RegisterDatabaseHelper.COL_TIMESTAMP},
                 COL_GROUP_NAME + "=?",
                 new String[]{groupName},
-                null, null, RegisterDatabaseHelper.COL_TIMESTAMP + " DESC");
+                null, null, RegisterDatabaseHelper.COL_TIMESTAMP + " ASC"); // 確保按時間戳升序
 
         List<String> newMessages = new ArrayList<>();
         if (cursor.moveToFirst()) {
@@ -494,16 +488,19 @@ public class Chatroom extends AppCompatActivity {
                 long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_TIMESTAMP));
                 String fullMessage = sender + ": " + message + " (" + formatTimestamp(timestamp) + ")";
                 newMessages.add(fullMessage);
-                Log.d("Chatroom", "Loaded message from DB: " + fullMessage);
+                lastMessageId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE_ID)); // 更新 lastMessageId
             } while (cursor.moveToNext());
         }
         cursor.close();
 
         runOnUiThread(() -> {
-            messageList.clear();
-            messageList.addAll(newMessages);
-            messageAdapter.notifyDataSetChanged();
-            messageRecyclerView.scrollToPosition(messageList.size() - 1);
+            if (!messageList.equals(newMessages)) {
+                messageList.clear();
+                messageList.addAll(newMessages);
+                messageAdapter.notifyDataSetChanged();
+                messageRecyclerView.scrollToPosition(messageList.size() - 1);
+                Log.d("Chatroom", "UI updated with " + messageList.size() + " messages, lastMessageId: " + lastMessageId);
+            }
         });
     }
 
@@ -568,6 +565,8 @@ public class Chatroom extends AppCompatActivity {
         checkInvitationStatus();
         isPollingActive = true;
         registerReceiver(invitationReceiver, new IntentFilter("com.example.cameraproject_2.INVITATION_UPDATED"), Context.RECEIVER_NOT_EXPORTED);
+        loadMessagesFromDatabase(); // 確保切換回來時加載最新數據
+        startMessagePolling();
     }
 
     @Override
@@ -583,6 +582,7 @@ public class Chatroom extends AppCompatActivity {
         isPollingActive = false;
         executorService.shutdown();
         if (dbHelper != null) {
+            dbHelper.setOnMessageInsertedListener(null); // 取消監聽
             dbHelper.closeDatabase();
         }
     }
