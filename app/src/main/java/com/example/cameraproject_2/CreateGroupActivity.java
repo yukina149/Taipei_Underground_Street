@@ -1,5 +1,13 @@
 package com.example.cameraproject_2;
 
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_GROUP_NAME;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_INVITATION_ID;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_INVITED_USER;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_IS_SYNCED_INV;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_STATUS;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.TABLE_INVITATIONS;
+
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
@@ -179,6 +187,61 @@ public class CreateGroupActivity extends AppCompatActivity {
         Log.d("CreateGroupActivity", "Saved group: " + groupName + " with members: " + String.join(", ", selectedMembers));
         Toast.makeText(this, "Group created: " + groupName, Toast.LENGTH_SHORT).show();
         finish();
+    }
+
+    public void createGroup(String groupName, List<String> memberUserIds) {
+        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
+        SQLiteDatabase db = dbHelper.getRegisterDatabase();
+
+        // 獲取當前用戶作為建立者
+        String creatorId = sharedPreferences.getString("userId", "1");
+        String invitationId = dbHelper.generateRandomId();
+
+        // 為建立者插入 accepted 邀請
+        ContentValues creatorValues = new ContentValues();
+        creatorValues.put(COL_INVITATION_ID, invitationId);
+        creatorValues.put(COL_GROUP_NAME, groupName);
+        creatorValues.put(COL_INVITED_USER, creatorId);
+        creatorValues.put(COL_STATUS, "accepted");
+        creatorValues.put(COL_IS_SYNCED_INV, 0);
+        long result = db.insert(TABLE_INVITATIONS, null, creatorValues);
+        if (result == -1) {
+            Log.e("CreateGroupActivity", "Failed to insert creator invitation for group: " + groupName);
+        } else {
+            Log.d("CreateGroupActivity", "Inserted creator invitation for group: " + groupName + ", invitationId: " + invitationId);
+        }
+
+        // 將創建者記錄到 SharedPreferences
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(groupName + "_creator", creatorId);
+        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+        groupNames.add(groupName);
+        editor.putStringSet("groupNames", groupNames);
+
+        // 為其他成員添加 pending 邀請
+        for (String memberId : memberUserIds) {
+            if (!memberId.equals(creatorId)) {
+                String memberInvitationId = dbHelper.generateRandomId();
+                ContentValues memberValues = new ContentValues();
+                memberValues.put(COL_INVITATION_ID, memberInvitationId);
+                memberValues.put(COL_GROUP_NAME, groupName);
+                memberValues.put(COL_INVITED_USER, memberId);
+                memberValues.put(COL_STATUS, "pending");
+                memberValues.put(COL_IS_SYNCED_INV, 0);
+                db.insert(TABLE_INVITATIONS, null, memberValues);
+            }
+        }
+
+        // 更新成員列表
+        List<String> allMembers = new ArrayList<>(memberUserIds);
+        allMembers.add(creatorId); // 包括建立者
+        String membersString = String.join(",", allMembers);
+        editor.putString(groupName + "_members", membersString);
+        editor.apply();
+
+        dbHelper.closeDatabase();
+        Toast.makeText(this, "Group created: " + groupName, Toast.LENGTH_SHORT).show();
+        startActivity(new Intent(this, Chatroom.class).putExtra("groupName", groupName));
     }
 
     private void saveGroup(String groupName, List<String> members) {

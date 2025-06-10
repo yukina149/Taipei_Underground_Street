@@ -84,6 +84,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private static final String KEY_CURRENT_BITMAP_PATH = "currentBitmapPath";
     private static final String INVITATION_CHECK_URL = "http://192.168.234.200/android_studio/fetch_invitations.php";
     private static final String USER_ID_KEY = "userId";
+    private static final String LOGGED_IN_USER_KEY = "loggedInUser"; // 儲存登入用戶名稱的鍵
     private static final long CHECK_INTERVAL = 30000; // 每 30 秒檢查一次
 
     private ImageView bigmap;
@@ -129,7 +130,9 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         setContentView(R.layout.activity_main); // 確保佈局設置
 
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-        currentUserId = sharedPreferences.getString(USER_ID_KEY, "訪客"); // 初始化 currentUserId
+        // 檢查是否已登入，並獲取用戶 ID 和名稱
+        currentUserId = sharedPreferences.getString(USER_ID_KEY, "訪客");
+        String loggedInUser = sharedPreferences.getString(LOGGED_IN_USER_KEY, "訪客");
 
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
@@ -152,7 +155,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         navigationView.setNavigationItemSelectedListener(this);
 
         updateNavigationMenu(); // 在確保 navigationView 初始化後呼叫
-        updateHeader();
+        updateHeader(); // 更新導航頭部資訊
 
         registerDbHelper = new RegisterDatabaseHelper(this);
         pictureDbHelper = new PictureDatabaseHelper(this);
@@ -353,13 +356,13 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     protected void updateNavigationMenu() {
         if (navigationView == null) {
             Log.e("MainActivity", "navigationView 為空，無法更新菜單");
-            return; // 如果 navigationView 為空則退出
+            return;
         }
 
         Menu menu = navigationView.getMenu();
         if (menu == null) {
             Log.e("MainActivity", "菜單為空，無法更新");
-            return; // 如果菜單不可用則退出
+            return;
         }
 
         menu.clear(); // 清除現有菜單項目
@@ -368,13 +371,38 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         int order = 100;
         for (String groupName : groupNames) {
             menu.add(Menu.NONE, Menu.NONE, order++, groupName)
-                    .setIcon(R.drawable.store_icon);
+                    .setIcon(R.drawable.store_icon); // 確保圖標可用
             Log.d("MainActivity", "添加群組到菜單: " + groupName);
         }
 
         // 填充默認菜單項目
         getMenuInflater().inflate(R.menu.menu_main, menu);
         Log.d("MainActivity", "導航菜單已更新，群組: " + groupNames.toString());
+    }
+
+    @Override
+    protected void updateHeader() {
+        if (navigationView == null) {
+            Log.e("MainActivity", "navigationView 為空，無法更新頭部");
+            return;
+        }
+
+        View headerView = navigationView.getHeaderView(0);
+        if (headerView != null) {
+            TextView usernameValueText = headerView.findViewById(R.id.textViewUsernameValue);
+            TextView accountValueText = headerView.findViewById(R.id.textViewAccountValue);
+
+            if (usernameValueText != null && accountValueText != null) {
+                String loggedInUser = sharedPreferences.getString(LOGGED_IN_USER_KEY, "訪客");
+                usernameValueText.setText(loggedInUser);
+                accountValueText.setText(currentUserId);
+                Log.d("MainActivity", "頭部更新為: 姓名: " + loggedInUser + ", 帳號: " + currentUserId);
+            } else {
+                Log.e("MainActivity", "無法找到頭部 TextView (textViewUsernameValue 或 textViewAccountValue)");
+            }
+        } else {
+            Log.e("MainActivity", "無法獲取導航頭部視圖");
+        }
     }
 
     public void onInvitationAccepted(String invitationId) {
@@ -472,6 +500,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                     .setNegativeButton("取消", null)
                     .show();
         } else {
+            // 處理動態添加的群組
             String groupName = item.getTitle().toString();
             Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
             if (groupNames.contains(groupName)) {
@@ -480,13 +509,16 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 if (!membersString.isEmpty()) {
                     String[] membersArray = membersString.split(",");
                     for (String member : membersArray) {
-                        members.add(member);
+                        members.add(member.trim());
                     }
                 }
                 Intent intent = new Intent(MainActivity.this, Chatroom.class);
                 intent.putExtra("groupName", groupName);
                 intent.putStringArrayListExtra("members", new ArrayList<>(members));
                 startActivity(intent);
+                Log.d("MainActivity", "跳轉到 Chatroom，群組: " + groupName);
+            } else {
+                Log.w("MainActivity", "群組 " + groupName + " 不在 groupNames 中");
             }
         }
 
@@ -899,7 +931,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     protected void onResume() {
         super.onResume();
         updateNavigationMenu();
-        updateHeader();
+        updateHeader(); // 每次恢復時更新頭部資訊
         registerDbHelper.checkInvitationStatus(sharedPreferences.getString("userId", "1"));
     }
 

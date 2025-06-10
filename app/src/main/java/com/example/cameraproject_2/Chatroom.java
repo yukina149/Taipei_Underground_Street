@@ -193,6 +193,12 @@ public class Chatroom extends AppCompatActivity {
         }
         Log.d("Chatroom", "Loaded userId: " + currentUserId + ", username: " + currentUsername);
 
+        // 檢查是否為群組建立者
+        if (isGroupCreator()) {
+            hasAcceptedInvitation = true; // 建立者自動接受
+            Log.d("Chatroom", "User " + currentUserId + " is the group creator, setting hasAcceptedInvitation to true");
+        }
+
         // 設置 dbHelper 監聽器
         dbHelper.setOnMessageInsertedListener(groupName1 -> {
             if (groupName1 != null && groupName1.equals(groupName)) {
@@ -207,6 +213,7 @@ public class Chatroom extends AppCompatActivity {
         // 更新 UI
         textViewGroupName.setText("Group: " + groupName);
         textViewMembers.setText("Members: " + String.join(", ", members));
+        updateUI(); // 根據 hasAcceptedInvitation 更新 UI
         Toast.makeText(this, "Welcome to " + groupName + ", " + currentUsername + "!", Toast.LENGTH_SHORT).show();
 
         // 設置按鈕監聽器
@@ -216,6 +223,29 @@ public class Chatroom extends AppCompatActivity {
 
         // 設置 NavigationView 監聽器
         navigationView.setNavigationItemSelectedListener(this::handleNavigationItemSelected);
+    }
+
+    private boolean isGroupCreator() {
+        String creatorId = sharedPreferences.getString(groupName + "_creator", null);
+        if (creatorId == null) {
+            // 如果沒有記錄創建者，檢查資料庫中的第一個 accepted 邀請是否為當前用戶
+            SQLiteDatabase db = dbHelper.getRegisterDatabase();
+            Cursor cursor = db.query(TABLE_INVITATIONS,
+                    new String[]{COL_INVITED_USER, COL_STATUS},
+                    COL_GROUP_NAME + "=? AND " + COL_STATUS + "=?",
+                    new String[]{groupName, "accepted"},
+                    null, null, COL_INVITATION_ID + " ASC LIMIT 1");
+            boolean isCreator = cursor.moveToFirst() && currentUserId.equals(cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITED_USER)));
+            cursor.close();
+            if (isCreator) {
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putString(groupName + "_creator", currentUserId);
+                editor.apply();
+                Log.d("Chatroom", "Set " + currentUserId + " as creator of group " + groupName);
+            }
+            return isCreator;
+        }
+        return currentUserId.equals(creatorId);
     }
 
     public void checkInvitationStatus() {
@@ -230,17 +260,19 @@ public class Chatroom extends AppCompatActivity {
                     List<Invitation> pendingInvitations = dbHelper.getPendingInvitations(currentUserId);
                     Log.d("Chatroom", "Pending invitations for " + currentUserId + ": " + pendingInvitations.size());
 
+                    // 移除 hasAcceptedInvitation 檢查，直接允許發送
+                    hasAcceptedInvitation = true; // 進入聊天室即視為已接受
+
                     if (!pendingInvitations.isEmpty()) {
                         for (Invitation invitation : pendingInvitations) {
-                            if ("pending".equals(invitation.getStatus())) {
+                            if ("pending".equals(invitation.getStatus()) && invitation.getGroupName().equals(groupName)) {
                                 showInvitationDialog(invitation);
-                                break; // 只顯示第一個待處理邀請
+                                break;
                             }
                         }
                     }
 
-                    // 更新 UI 和導航菜單
-                    updateUI();
+                    updateUI(); // 更新 UI 移除鎖定
                     updateNavigationMenu();
                 });
             }
@@ -262,20 +294,10 @@ public class Chatroom extends AppCompatActivity {
                 .setMessage("您已被邀請加入群組: " + invitation.getGroupName())
                 .setPositiveButton("接受", (dialog, which) -> {
                     dbHelper.updateInvitationStatus(invitation.getInvitationId(), "accepted");
-                    checkInvitationStatus();
+                    hasAcceptedInvitation = true; // 立即更新邀請狀態
+                    updateUI(); // 立即更新 UI
+                    checkInvitationStatus(); // 重新檢查並同步
                     dialog.dismiss();
-                    Intent intent = new Intent(Chatroom.this, Chatroom.class);
-                    intent.putExtra("groupName", invitation.getGroupName());
-                    String membersString = sharedPreferences.getString(invitation.getGroupName() + "_members", "");
-                    List<String> membersList = new ArrayList<>();
-                    if (!membersString.isEmpty()) {
-                        String[] membersArray = membersString.split(",");
-                        for (String member : membersArray) {
-                            membersList.add(member.trim());
-                        }
-                    }
-                    intent.putStringArrayListExtra("members", new ArrayList<>(membersList));
-                    startActivity(intent);
                 })
                 .setNegativeButton("拒絕", (dialog, which) -> {
                     dbHelper.updateInvitationStatus(invitation.getInvitationId(), "rejected");
@@ -290,6 +312,10 @@ public class Chatroom extends AppCompatActivity {
         String message = editTextMessage.getText().toString().trim();
         if (message.isEmpty()) {
             Toast.makeText(this, "Message cannot be empty", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!hasAcceptedInvitation) {
+            Toast.makeText(this, "Please accept the group invitation to send messages", Toast.LENGTH_SHORT).show();
             return;
         }
         String messageId = dbHelper.generateRandomId(); // 生成臨時 messageId
@@ -473,6 +499,7 @@ public class Chatroom extends AppCompatActivity {
                         if (userId != null) members.add(userId);
                     }
                 }
+                textViewMembers.setText("Members: " + String.join(", ", members)); // 更新成員列表
             } else {
                 Log.e("Chatroom", "Failed to get group name for invitation ID: " + invitationId);
                 Toast.makeText(Chatroom.this, "無法找到群組", Toast.LENGTH_SHORT).show();
@@ -500,6 +527,7 @@ public class Chatroom extends AppCompatActivity {
     }
 
     private void updateUI() {
+        /*
         if (hasAcceptedInvitation) {
             buttonSend.setEnabled(true);
             editTextMessage.setEnabled(true);
@@ -509,7 +537,15 @@ public class Chatroom extends AppCompatActivity {
             editTextMessage.setEnabled(false);
             editTextMessage.setHint("請先接受群組邀請才能發送訊息");
         }
+        Log.d("Chatroom", "UI updated, hasAcceptedInvitation: " + hasAcceptedInvitation);
+        */
+        // 直接啟用訊息輸入
+        editTextMessage.setEnabled(true);
+        editTextMessage.setHint("輸入訊息...");
+        buttonSend.setEnabled(true); // 確保發送按鈕可用
+
     }
+
 
     @Override
     protected void onResume() {
