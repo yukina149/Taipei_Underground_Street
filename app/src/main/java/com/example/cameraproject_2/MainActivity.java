@@ -7,8 +7,6 @@ import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_INVITATION_
 import static com.example.cameraproject_2.RegisterDatabaseHelper.REGISTER_DB_NAME;
 import static com.example.cameraproject_2.RegisterDatabaseHelper.TABLE_INVITATIONS;
 
-import static org.opencv.android.NativeCameraView.TAG;
-
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -35,7 +33,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -58,20 +55,13 @@ import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import com.google.android.material.navigation.NavigationView;
 import com.unity3d.player.UnityPlayerActivity;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -92,7 +82,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private static final String KEY_PHOTO_URI = "photoUri";
     private static final String KEY_PHOTO_FILE_PATH = "photoFilePath";
     private static final String KEY_CURRENT_BITMAP_PATH = "currentBitmapPath";
-    private static final String INVITATION_CHECK_URL = "http://192.168.10.15/android_studio/fetch_invitations.php";
+    private static final String INVITATION_CHECK_URL = "http://192.168.234.200/android_studio/fetch_invitations.php";
     private static final String USER_ID_KEY = "userId";
     private static final long CHECK_INTERVAL = 30000; // 每 30 秒檢查一次
 
@@ -117,7 +107,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private PictureDatabaseHelper pictureDbHelper;
     private SQLiteDatabase database;
 
-    private String currentLocation = "Unknown";
+    private String currentLocation = "未知";
     private String selectedDestination = "";
     private Spinner destinationSpinner;
     private TextView currentLocationTextView;
@@ -126,24 +116,26 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private Handler handler = new Handler();
     private Runnable invitationChecker;
-    private RegisterDatabaseHelper dbHelper;
+    private SharedPreferences sharedPreferences;
+
+    private String currentUserId;
+    private NavigationView navigationView; // 導航視圖成員變量
+    private DrawerLayout drawerLayout; // 抽屜佈局成員變量
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main); // 確保佈局設置
 
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        currentUserId = sharedPreferences.getString(USER_ID_KEY, "訪客"); // 初始化 currentUserId
 
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
 
-        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
-        dbHelper.setServerUrl("http://192.168.10.15/android_studio");
-
         if (drawerLayout == null || navigationView == null) {
-            Toast.makeText(this, "Navigation setup failed", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "導航設置失敗", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
@@ -159,7 +151,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         navigationView.bringToFront();
         navigationView.setNavigationItemSelectedListener(this);
 
-        updateNavigationMenu();
+        updateNavigationMenu(); // 在確保 navigationView 初始化後呼叫
         updateHeader();
 
         registerDbHelper = new RegisterDatabaseHelper(this);
@@ -169,22 +161,15 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             registerDbHelper.getRegisterDatabase();
             database = pictureDbHelper.getPictureDatabase();
         } catch (IOException e) {
-            Log.e("MainActivity", "Error creating databases: " + e.getMessage());
-            Toast.makeText(this, "Database initialization failed", Toast.LENGTH_LONG).show();
+            Log.e("MainActivity", "創建資料庫錯誤: " + e.getMessage());
+            Toast.makeText(this, "資料庫初始化失敗", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
-        // 找到 NavigationView
-        navigationView = findViewById(R.id.nav_view); // 根據你的 XML ID 修改
-        if (navigationView == null) {
-            Log.e(TAG, "NavigationView not found");
-            return;
-        }
-        // 註冊 BroadcastReceiver
+
         IntentFilter filter = new IntentFilter("com.example.cameraproject_2.INVITATION_UPDATED");
         //registerReceiver(new RegisterDatabaseHelper.InvitationUpdateReceiver(), filter);
 
-        // 檢查 Intent 是否帶有更新標記
         if (getIntent().getBooleanExtra("UPDATE_MENU", false)) {
             updateNavigationMenu();
         }
@@ -206,7 +191,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 try {
                     currentBitmap = BitmapFactory.decodeFile(currentBitmapPath);
                 } catch (Exception e) {
-                    Log.e("MainActivity", "Failed to restore currentBitmap: " + e.getMessage());
+                    Log.e("MainActivity", "恢復 currentBitmap 失敗: " + e.getMessage());
                     currentBitmap = null;
                     currentBitmapPath = null;
                 }
@@ -241,12 +226,12 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         currentLocationTextView = findViewById(R.id.currentLocationTextView);
 
         if (!OpenCVLoader.initDebug()) {
-            Log.e("OpenCV", "Unable to load OpenCV");
+            Log.e("OpenCV", "無法載入 OpenCV");
             Toast.makeText(this, "OpenCV 初始化失敗，請檢查應用配置", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
-        Log.d("OpenCV", "OpenCV loaded successfully");
+        Log.d("OpenCV", "OpenCV 載入成功");
 
         cardPicture = findViewById(R.id.cardPicture);
         cardCamera = findViewById(R.id.cardCamera);
@@ -272,21 +257,21 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                                         String imageUriString = bestMatch.getUri();
                                         Log.d("MainActivity", "Image URI from ORBActivity: " + imageUriString);
                                         String fileName = imageUriString.replace("file://assets/", "");
-                                        Log.d("MainActivity", "Attempting to load file: " + fileName);
+                                        Log.d("MainActivity", "嘗試載入文件: " + fileName);
                                         try {
                                             InputStream inputStream = getAssets().open(fileName);
                                             Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
                                             inputStream.close();
                                             smallmap.setImageBitmap(bitmap);
-                                            Log.d("MainActivity", "Set smallmap with image: " + fileName);
+                                            Log.d("MainActivity", "設定 smallmap 圖片: " + fileName);
                                         } catch (IOException e) {
-                                            Log.e("MainActivity", "Error loading image for smallmap: " + fileName + ", Error: " + e.getMessage());
+                                            Log.e("MainActivity", "載入 smallmap 圖片錯誤: " + fileName + ", 錯誤: " + e.getMessage());
                                             Toast.makeText(this, "無法加載匹配的地圖圖片", Toast.LENGTH_SHORT).show();
                                         }
                                     }
                                 }
 
-                                if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
+                                if (!currentLocation.equals("未知") && !currentLocation.isEmpty()) {
                                     buttonCorrectLocation.setEnabled(true);
                                     buttonIncorrectLocation.setEnabled(true);
                                 } else {
@@ -302,7 +287,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                                 currentLocationTextView.setText("Location: " + selectedLocation);
                                 Toast.makeText(this, "位置已更新為：" + selectedLocation, Toast.LENGTH_SHORT).show();
 
-                                if (!currentLocation.equals("Unknown") && !currentLocation.isEmpty()) {
+                                if (!currentLocation.equals("未知") && !currentLocation.isEmpty()) {
                                     buttonCorrectLocation.setEnabled(true);
                                     buttonIncorrectLocation.setEnabled(false);
                                 } else {
@@ -322,7 +307,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK) {
-                        Log.d("MainActivity", "Photo captured successfully, processing image...");
+                        Log.d("MainActivity", "照片拍攝成功，處理圖片...");
                         if (photoUri != null) {
                             processCapturedImage(photoUri);
                         } else {
@@ -334,7 +319,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                             }
                         }
                     } else {
-                        Log.d("MainActivity", "Take picture canceled or failed, resultCode: " + result.getResultCode());
+                        Log.d("MainActivity", "拍照取消或失敗, resultCode: " + result.getResultCode());
                         Toast.makeText(this, "拍照取消或失敗", Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -345,66 +330,61 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                         Uri selectedImageUri = result.getData().getData();
                         if (selectedImageUri != null) {
-                            Log.d("MainActivity", "Image selected successfully, processing image...");
+                            Log.d("MainActivity", "圖片選擇成功，處理圖片...");
                             processSelectedImage(selectedImageUri);
                         } else {
-                            Log.e("MainActivity", "Selected image URI is null");
+                            Log.e("MainActivity", "選擇的圖片 URI 為空");
                             Toast.makeText(this, "無法獲取選擇的圖片", Toast.LENGTH_SHORT).show();
                         }
                     } else {
-                        Log.d("MainActivity", "Image selection canceled or failed, resultCode: " + result.getResultCode());
+                        Log.d("MainActivity", "圖片選擇取消或失敗, resultCode: " + result.getResultCode());
                         Toast.makeText(this, "圖片選擇取消或失敗", Toast.LENGTH_SHORT).show();
                     }
                 });
 
         setupClickListeners();
 
-        View headerView = navigationView.getHeaderView(0);
-        if (headerView == null) {
-            headerView = navigationView.inflateHeaderView(R.layout.activity_menu_header);
-        }
-
         createNotificationChannel();
         startInvitationChecking();
+        requestNotificationPermission();
     }
 
     @Override
     protected void updateNavigationMenu() {
-        if (navigationView != null) {
-            Menu menu = navigationView.getMenu();
-            menu.clear(); // 清空舊菜單
-            SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-            Set<String> groupNames = prefs.getStringSet("groupNames", new HashSet<>());
-            for (String groupName : groupNames) {
-                menu.add(groupName); // 動態添加群組
-            }
-            Log.d(TAG, "Navigation menu updated with groups: " + groupNames.toString());
+        if (navigationView == null) {
+            Log.e("MainActivity", "navigationView 為空，無法更新菜單");
+            return; // 如果 navigationView 為空則退出
         }
 
-        Menu navMenu = navigationView.getMenu();
-        navMenu.clear();
+        Menu menu = navigationView.getMenu();
+        if (menu == null) {
+            Log.e("MainActivity", "菜單為空，無法更新");
+            return; // 如果菜單不可用則退出
+        }
 
-        getMenuInflater().inflate(R.menu.menu_main, navMenu);
-
-        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+        menu.clear(); // 清除現有菜單項目
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        Set<String> groupNames = prefs.getStringSet("groupNames", new HashSet<>());
         int order = 100;
         for (String groupName : groupNames) {
-            navMenu.add(Menu.NONE, Menu.NONE, order++, groupName)
+            menu.add(Menu.NONE, Menu.NONE, order++, groupName)
                     .setIcon(R.drawable.store_icon);
-            Log.d("MainActivity", "Added group to menu: " + groupName); // 添加日誌確認
+            Log.d("MainActivity", "添加群組到菜單: " + groupName);
         }
+
+        // 填充默認菜單項目
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        Log.d("MainActivity", "導航菜單已更新，群組: " + groupNames.toString());
     }
 
-    // 在 MainActivity.java 中（假設）
     public void onInvitationAccepted(String invitationId) {
-        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
-        dbHelper.updateInvitationStatus(invitationId, "accepted");
-        dbHelper.syncInvitations(MainActivity.this, new RegisterDatabaseHelper.SyncCallback() { // 添加 MainActivity.this 作為 Context
+        registerDbHelper.updateInvitationStatus(invitationId, "accepted");
+        registerDbHelper.syncInvitations(this, new RegisterDatabaseHelper.SyncCallback() {
             @Override
             public void onSyncComplete(boolean success) {
                 runOnUiThread(() -> {
                     if (success) {
-                        String groupName = getGroupNameFromInvitation(invitationId); // 實現此方法
+                        String groupName = getGroupNameFromInvitation(invitationId);
                         if (groupName != null) {
                             SharedPreferences sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
                             String membersString = sharedPreferences.getString(groupName + "_members", "");
@@ -420,7 +400,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                             intent.putStringArrayListExtra("members", new ArrayList<>(members));
                             startActivity(intent);
                         } else {
-                            Log.e("MainActivity", "Failed to get group name for invitation ID: " + invitationId);
+                            Log.e("MainActivity", "無法獲取邀請 ID 的群組名稱: " + invitationId);
                             Toast.makeText(MainActivity.this, "無法找到群組", Toast.LENGTH_SHORT).show();
                         }
                     }
@@ -430,7 +410,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     }
 
     private String getGroupNameFromInvitation(String invitationId) {
-        SQLiteDatabase db = dbHelper.getRegisterDatabase();
+        SQLiteDatabase db = registerDbHelper.getRegisterDatabase();
         Cursor cursor = db.query(TABLE_INVITATIONS,
                 new String[]{COL_GROUP_NAME},
                 COL_INVITATION_ID + " = ?",
@@ -476,7 +456,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             Intent intent = new Intent(MainActivity.this, CreateGroupActivity.class);
             startActivity(intent);
         } else if (id == R.id.nav_logout) {
-            new android.app.AlertDialog.Builder(this)
+            new AlertDialog.Builder(this)
                     .setTitle("確認登出")
                     .setMessage("您確定要登出嗎？")
                     .setPositiveButton("確定", (dialog, which) -> {
@@ -485,7 +465,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                         editor.putBoolean("isLoggedIn", false);
                         editor.putString("userId", "訪客");
                         editor.apply();
-                        Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "已登出", Toast.LENGTH_SHORT).show();
                         Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
                         startActivity(intent);
                     })
@@ -533,7 +513,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private String saveBitmapToTempFile(Bitmap bitmap) {
         if (bitmap == null || bitmap.isRecycled()) {
-            Log.w("MainActivity", "Bitmap is null or recycled, cannot save to temp file");
+            Log.w("MainActivity", "Bitmap 為空或已回收，無法保存到臨時文件");
             return null;
         }
 
@@ -547,7 +527,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             }
             return tempFile.getAbsolutePath();
         } catch (IOException e) {
-            Log.e("MainActivity", "Failed to save bitmap to temp file: " + e.getMessage());
+            Log.e("MainActivity", "保存 Bitmap 到臨時文件失敗: " + e.getMessage());
             return null;
         }
     }
@@ -571,7 +551,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     }
 
     private void captureImage() {
-        Log.d("MainActivity", "Starting captureImage()");
+        Log.d("MainActivity", "開始 captureImage()");
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
@@ -585,7 +565,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         try {
             photoFile = createImageFile();
         } catch (IOException e) {
-            Log.e("MainActivity", "Error creating image file: " + e.getMessage());
+            Log.e("MainActivity", "創建圖片文件錯誤: " + e.getMessage());
             Toast.makeText(this, "無法創建圖片文件", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -593,7 +573,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         try {
             photoUri = FileProvider.getUriForFile(this, "com.example.cameraproject_2.fileprovider", photoFile);
         } catch (IllegalArgumentException e) {
-            Log.e("MainActivity", "Error generating URI with FileProvider: " + e.getMessage());
+            Log.e("MainActivity", "使用 FileProvider 生成 URI 錯誤: " + e.getMessage());
             Toast.makeText(this, "無法生成圖片 URI，請檢查 FileProvider 配置", Toast.LENGTH_LONG).show();
             return;
         }
@@ -603,7 +583,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
             takePictureLauncher.launch(takePictureIntent);
         } else {
-            Log.e("MainActivity", "No camera app available to handle intent");
+            Log.e("MainActivity", "無可用相機應用處理意圖");
             Toast.makeText(this, "找不到相機應用程式，請確保設備已安裝相機應用", Toast.LENGTH_LONG).show();
         }
     }
@@ -618,11 +598,10 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private void saveImageToGallery(Bitmap imageBitmap) {
         if (imageBitmap == null || imageBitmap.isRecycled()) {
-            Log.w("MainActivity", "Bitmap is null or recycled, cannot save to gallery");
+            Log.w("MainActivity", "Bitmap 為空或已回收，無法保存到相冊");
             return;
         }
 
-        // Use app-specific external storage instead of public storage
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         String fileName = "IMG_" + timeStamp + ".jpg";
@@ -636,23 +615,23 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             mediaScanIntent.setData(Uri.fromFile(imageFile));
             sendBroadcast(mediaScanIntent);
 
-            Log.d("MainActivity", "Image saved to app storage: " + imageFile.getAbsolutePath());
+            Log.d("MainActivity", "圖片已保存到應用儲存空間: " + imageFile.getAbsolutePath());
             Toast.makeText(this, "圖片已儲存至應用儲存空間", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Log.e("Storage", "Error saving image to app storage: " + e.getMessage());
+            Log.e("Storage", "保存圖片到應用儲存空間錯誤: " + e.getMessage());
             Toast.makeText(this, "無法儲存圖片", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void openGallery() {
-        Log.d("MainActivity", "Opening gallery...");
+        Log.d("MainActivity", "開啟圖庫...");
         Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         pickImageLauncher.launch(intent);
     }
 
     private Bitmap getCorrectedBitmap(Uri photoUri, Bitmap originalBitmap) {
         if (photoFile == null) {
-            Log.w("MainActivity", "photoFile is null, cannot read EXIF data. Returning original bitmap.");
+            Log.w("MainActivity", "photoFile 為空，無法讀取 EXIF 數據。返回原始 Bitmap。");
             return originalBitmap;
         }
 
@@ -682,30 +661,30 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 return rotatedBitmap;
             }
         } catch (IOException e) {
-            Log.e("MainActivity", "Error reading EXIF data: " + e.getMessage());
+            Log.e("MainActivity", "讀取 EXIF 數據錯誤: " + e.getMessage());
         }
         return originalBitmap;
     }
 
     private void processCapturedImage(Uri photoUri) {
         if (photoUri == null) {
-            Log.e("MainActivity", "photoUri is null in processCapturedImage");
+            Log.e("MainActivity", "photoUri 在 processCapturedImage 中為空");
             Toast.makeText(this, "無法處理拍攝的照片：URI 為空", Toast.LENGTH_LONG).show();
             return;
         }
 
-        Log.d("MainActivity", "Processing captured image with URI: " + photoUri.toString());
+        Log.d("MainActivity", "處理拍攝圖片，URI: " + photoUri.toString());
         try {
             InputStream input = getContentResolver().openInputStream(photoUri);
             if (input == null) {
-                Log.e("MainActivity", "Failed to open InputStream for photoUri");
+                Log.e("MainActivity", "無法為 photoUri 打開 InputStream");
                 Toast.makeText(this, "無法讀取拍攝的圖片", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             Bitmap bitmap = BitmapFactory.decodeStream(input);
             if (bitmap == null) {
-                Log.e("MainActivity", "Failed to decode bitmap from InputStream");
+                Log.e("MainActivity", "從 InputStream 解碼 Bitmap 失敗");
                 Toast.makeText(this, "無法解碼拍攝的圖片", Toast.LENGTH_SHORT).show();
                 input.close();
                 return;
@@ -713,7 +692,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
             bitmap = getCorrectedBitmap(photoUri, bitmap);
             if (bitmap == null) {
-                Log.e("MainActivity", "Bitmap is null after getCorrectedBitmap");
+                Log.e("MainActivity", "getCorrectedBitmap 後 Bitmap 為空");
                 Toast.makeText(this, "無法處理圖片方向", Toast.LENGTH_SHORT).show();
                 input.close();
                 return;
@@ -738,24 +717,24 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
             input.close();
         } catch (IOException e) {
-            Log.e("Camera", "Error processing captured image: " + e.getMessage());
+            Log.e("Camera", "處理拍攝圖片錯誤: " + e.getMessage());
             Toast.makeText(this, "處理拍攝的圖片時出錯", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void processSelectedImage(Uri selectedImageUri) {
-        Log.d("MainActivity", "Processing selected image with URI: " + selectedImageUri.toString());
+        Log.d("MainActivity", "處理選擇圖片，URI: " + selectedImageUri.toString());
         try {
             InputStream input = getContentResolver().openInputStream(selectedImageUri);
             if (input == null) {
-                Log.e("MainActivity", "Failed to open InputStream for selectedImageUri");
+                Log.e("MainActivity", "無法為 selectedImageUri 打開 InputStream");
                 Toast.makeText(this, "無法讀取選擇的圖片", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             Bitmap bitmap = BitmapFactory.decodeStream(input);
             if (bitmap == null) {
-                Log.e("MainActivity", "Failed to decode bitmap from InputStream");
+                Log.e("MainActivity", "從 InputStream 解碼 Bitmap 失敗");
                 Toast.makeText(this, "無法解碼選擇的圖片", Toast.LENGTH_SHORT).show();
                 input.close();
                 return;
@@ -778,7 +757,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
             input.close();
         } catch (IOException e) {
-            Log.e("Gallery", "Error processing selected image: " + e.getMessage());
+            Log.e("Gallery", "處理選擇圖片錯誤: " + e.getMessage());
             Toast.makeText(this, "處理選擇的圖片時出錯", Toast.LENGTH_SHORT).show();
         }
     }
@@ -792,7 +771,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                     grantResults[2] == PackageManager.PERMISSION_GRANTED) {
                 captureImage();
             } else {
-                Log.w("MainActivity", "Camera or storage permissions denied");
+                Log.w("MainActivity", "相機或儲存權限被拒絕");
                 Toast.makeText(this, "需要相機和儲存權限才能使用拍照功能", Toast.LENGTH_LONG).show();
             }
         } else if (requestCode == REQUEST_NOTIFICATION_PERMISSION_CODE) {
@@ -805,27 +784,28 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     }
 
     private void checkInvitations() {
-        String currentUserId = sharedPreferences.getString(USER_ID_KEY, "訪客");
         if (currentUserId.equals("訪客")) {
-            Log.d("MainActivity", "User not logged in, skipping invitation check");
+            Log.d("MainActivity", "用戶未登入，跳過邀請檢查");
             return;
         }
 
-        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
-        List<Invitation> invitations = dbHelper.getPendingInvitations(currentUserId);
-        Log.d("MainActivity", "Found " + invitations.size() + " pending invitations for userId: " + currentUserId);
+        List<Invitation> invitations = registerDbHelper.getPendingInvitations(currentUserId);
+        Log.d("MainActivity", "找到 " + invitations.size() + " 個待處理邀請，userId: " + currentUserId);
 
         for (Invitation invitation : invitations) {
             String groupName = invitation.getGroupName();
-            // 檢查是否已經處理過該邀請
             if (!isGroupInPreferences(groupName)) {
-                Log.d("MainActivity", "New invitation for group: " + groupName);
-                runOnUiThread(() -> showInvitationDialog(groupName, invitation.getInvitationId()));
+                Log.d("MainActivity", "新邀請，群組: " + groupName);
+                runOnUiThread(() -> {
+                    showInvitationDialog(groupName, invitation.getInvitationId());
+                    showInvitationNotification(groupName);
+                });
                 updateGroupInPreferences(groupName);
                 updateNavigationMenu();
             }
         }
     }
+
     private void showInvitationDialog(String groupName, String invitationId) {
         new AlertDialog.Builder(this)
                 .setTitle("群組邀請")
@@ -856,18 +836,19 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     }
 
     private void showInvitationNotification(String groupName) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_PERMISSION_CODE);
+            return;
+        }
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "invitation_channel")
-                .setSmallIcon(android.R.drawable.ic_dialog_info) // Use default system icon
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle("新群組邀請")
                 .setContentText("您收到來自群組 " + groupName + " 的邀請")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true);
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_PERMISSION_CODE);
-            return;
-        }
         notificationManager.notify((int) System.currentTimeMillis(), builder.build());
     }
 
@@ -887,15 +868,24 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         invitationChecker = new Runnable() {
             @Override
             public void run() {
-                // 先同步資料庫
-                registerDbHelper.syncInvitations(MainActivity.this, new RegisterDatabaseHelper.SyncCallback() { // 添加 MainActivity.this 作為 Context
+                registerDbHelper.syncInvitations(MainActivity.this, new RegisterDatabaseHelper.SyncCallback() {
                     @Override
                     public void onSyncComplete(boolean success) {
                         if (!success) {
-                            Log.e("MainActivity", "Invitation sync failed");
+                            Log.e("MainActivity", "邀請同步失敗");
                         } else {
-                            // 檢查是否有新邀請
-                            checkInvitations();
+                            String lastSyncTime = sharedPreferences.getString("last_sync_time", "0");
+                            registerDbHelper.fetchInvitationsFromServer(MainActivity.this, currentUserId, lastSyncTime, new RegisterDatabaseHelper.SyncCallback() {
+                                @Override
+                                public void onSyncComplete(boolean success) {
+                                    if (success) {
+                                        SharedPreferences.Editor editor = sharedPreferences.edit();
+                                        editor.putString("last_sync_time", String.valueOf(System.currentTimeMillis()));
+                                        editor.apply();
+                                        checkInvitations();
+                                    }
+                                }
+                            });
                         }
                     }
                 });
@@ -910,6 +900,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         super.onResume();
         updateNavigationMenu();
         updateHeader();
+        registerDbHelper.checkInvitationStatus(sharedPreferences.getString("userId", "1"));
     }
 
     @Override
@@ -920,5 +911,13 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         }
         if (registerDbHelper != null) registerDbHelper.closeDatabase();
         if (pictureDbHelper != null) pictureDbHelper.closeDatabase();
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_PERMISSION_CODE);
+            }
+        }
     }
 }

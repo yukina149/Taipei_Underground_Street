@@ -135,5 +135,8 @@ dependencies {
 
     //群組需要使用
     implementation 'org.json:json:20230227'
+
+    //訊息框UI
+    implementation 'androidx.cardview:cardview:1.0.0'
         
 }

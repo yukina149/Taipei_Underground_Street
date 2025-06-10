@@ -85,49 +85,68 @@ public class Chatroom extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chatroom);
 
+        // 初始化 SharedPreferences
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
 
+        // 初始化 UI 組件
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
-
         Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("taipei underground");
-            getSupportActionBar().setDisplayShowTitleEnabled(true);
-        }
-
-        toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.open, R.string.close);
-        drawerLayout.addDrawerListener(toggle);
-        toggle.syncState();
-
-        if (drawerLayout == null || navigationView == null) {
-            Toast.makeText(this, "Navigation setup failed", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-
-        setupDrawer();
-        updateNavigationMenu();
-
         messageRecyclerView = findViewById(R.id.messageRecyclerView);
         editTextMessage = findViewById(R.id.editTextMessage);
         buttonSend = findViewById(R.id.buttonSend);
         textViewGroupName = findViewById(R.id.textViewGroupName);
         textViewMembers = findViewById(R.id.textViewMembers);
 
-        // 檢查所有 UI 組件
-        if (messageRecyclerView == null || editTextMessage == null || buttonSend == null ||
-                textViewGroupName == null || textViewMembers == null) {
-            Toast.makeText(this, "UI initialization failed", Toast.LENGTH_SHORT).show();
-            Log.e("Chatroom", "One or more UI components are null: recyclerView=" + (messageRecyclerView != null) +
-                    ", editText=" + (editTextMessage != null) + ", button=" + (buttonSend != null) +
-                    ", groupName=" + (textViewGroupName != null) + ", members=" + (textViewMembers != null));
+        // 設置 Toolbar
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle("taipei underground");
+            getSupportActionBar().setDisplayShowTitleEnabled(true);
+        }
+
+        // 初始化 dbHelper
+        dbHelper = new RegisterDatabaseHelper(this);
+
+        // 檢查 UI 組件和 dbHelper 是否為 null
+        if (drawerLayout == null || navigationView == null || toolbar == null ||
+                messageRecyclerView == null || editTextMessage == null || buttonSend == null ||
+                textViewGroupName == null || textViewMembers == null || dbHelper == null) {
+            Log.e("Chatroom", "UI components or dbHelper are null, details - " +
+                    "drawerLayout=" + (drawerLayout != null) +
+                    ", navView=" + (navigationView != null) +
+                    ", toolbar=" + (toolbar != null) +
+                    ", recyclerView=" + (messageRecyclerView != null) +
+                    ", editText=" + (editTextMessage != null) +
+                    ", button=" + (buttonSend != null) +
+                    ", groupName=" + (textViewGroupName != null) +
+                    ", members=" + (textViewMembers != null) +
+                    ", dbHelper=" + (dbHelper != null));
+            Toast.makeText(this, "Initialization failed", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
+        // 註冊廣播接收器
+        registerReceiver(invitationReceiver, new IntentFilter("com.example.cameraproject_2.INVITATION_UPDATED"), Context.RECEIVER_NOT_EXPORTED);
+
+        // 設置 Drawer
+        toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.open, R.string.close);
+        drawerLayout.addDrawerListener(toggle);
+        toggle.syncState();
+
+        // 後續初始化邏輯
+        setupDrawer();
+        updateNavigationMenu();
+        checkInvitationStatus();
+
+        // 設置 RecyclerView
+        messageList = new ArrayList<>();
+        messageAdapter = new MessageAdapter(messageList);
+        messageRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        messageRecyclerView.setAdapter(messageAdapter);
+
+        // 處理 Intent 數據
         Intent intent = getIntent();
         groupName = intent.getStringExtra("groupName");
         members = intent.getStringArrayListExtra("members");
@@ -140,7 +159,9 @@ public class Chatroom extends AppCompatActivity {
                 if (!membersString.isEmpty()) {
                     String[] membersArray = membersString.split(",");
                     for (String member : membersArray) {
-                        members.add(member.trim());
+                        String cleanMember = member.trim();
+                        String userId = dbHelper.getUserIdFromUsername(cleanMember);
+                        if (userId != null) members.add(userId);
                     }
                 }
             }
@@ -151,104 +172,53 @@ public class Chatroom extends AppCompatActivity {
             }
         }
 
-        dbHelper = new RegisterDatabaseHelper(this);
-        if (dbHelper == null) {
-            Toast.makeText(this, "Database helper initialization failed", Toast.LENGTH_SHORT).show();
-            Log.e("Chatroom", "dbHelper is null");
-            finish();
-            return;
-        }
-        dbHelper.setOnMessageInsertedListener(groupName1 -> {
-            if (groupName1 != null && groupName1.equals(groupName)) {
-                runOnUiThread(() -> {
-                    loadMessagesFromDatabase();
-                    Log.d("Chatroom", "Message inserted for group: " + groupName1 + ", UI reloaded");
-                });
-            }
-        });
-
+        // 設置使用者信息
+        Log.d("Chatroom", "Initial userId from prefs: " + sharedPreferences.getString("userId", null));
         currentUserId = sharedPreferences.getString("userId", null);
         if (currentUserId == null) {
-            Log.e("Chatroom", "userId is null, checking login status");
-            currentUserId = "1"; // 臨時值，應從登錄流程獲取
+            currentUserId = "1"; // 確保這是預設值
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("userId", currentUserId);
+            editor.apply();
+            Log.w("Chatroom", "userId was null, set to 1");
         }
-        currentUsername = sharedPreferences.getString("loggedInUser", "Unknown");
-        if ("Unknown".equals(currentUsername)) {
-            currentUsername = dbHelper.getUsernameFromUserId(currentUserId);
-            if (currentUsername != null) {
-                SharedPreferences.Editor editor = sharedPreferences.edit();
-                editor.putString("loggedInUser", currentUsername);
-                editor.apply();
-                Log.d("Chatroom", "Updated currentUsername from DB: " + currentUsername);
-            }
+        Log.d("Chatroom", "Final userId: " + currentUserId);
+        currentUsername = dbHelper.getUsernameFromUserId(currentUserId);
+        if (currentUsername == null) {
+            currentUsername = "hilda111"; // 預設 username
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("loggedInUser", currentUsername);
+            editor.apply();
+            Log.w("Chatroom", "Username not found, set to hilda111");
         }
         Log.d("Chatroom", "Loaded userId: " + currentUserId + ", username: " + currentUsername);
+
+        // 設置 dbHelper 監聽器
+        dbHelper.setOnMessageInsertedListener(groupName1 -> {
+            if (groupName1 != null && groupName1.equals(groupName)) {
+                runOnUiThread(this::loadMessagesFromDatabase);
+                Log.d("Chatroom", "Message inserted for group: " + groupName1 + ", UI reloaded");
+            }
+        });
+
+        // 初始化 ExecutorService
         executorService = Executors.newSingleThreadExecutor();
 
-        messageList = new ArrayList<>();
-        loadMessagesFromDatabase();
-        messageAdapter = new MessageAdapter(messageList);
-        messageRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-        messageRecyclerView.setAdapter(messageAdapter);
-        messageRecyclerView.scrollToPosition(messageList.size() - 1);
-
-        if (textViewGroupName != null) textViewGroupName.setText("Group: " + groupName);
-        if (textViewMembers != null) textViewMembers.setText("Members: " + String.join(", ", members));
-
+        // 更新 UI
+        textViewGroupName.setText("Group: " + groupName);
+        textViewMembers.setText("Members: " + String.join(", ", members));
         Toast.makeText(this, "Welcome to " + groupName + ", " + currentUsername + "!", Toast.LENGTH_SHORT).show();
 
-        checkInvitationStatus();
-        buttonSend.setOnClickListener(v -> onSendButtonClick(v));
+        // 設置按鈕監聽器
+        buttonSend.setOnClickListener(this::onSendButtonClick);
+        loadMessagesFromDatabase();
         startMessagePolling();
 
-        navigationView.setNavigationItemSelectedListener(item -> {
-            int id = item.getItemId();
-            Intent navigationIntent = null;
-
-            if (id == R.id.nav_logout) {
-                SharedPreferences.Editor editor = sharedPreferences.edit();
-                editor.putBoolean("isLoggedIn", false);
-                editor.putString("loggedInUser", "訪客");
-                editor.putString("userId", "訪客");
-                editor.apply();
-                Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
-                navigationIntent = new Intent(Chatroom.this, PersonalAccount.class);
-                startActivity(navigationIntent);
-                finish();
-            } else if (id == R.id.Chat_room) {
-                navigationIntent = new Intent(Chatroom.this, MainActivity.class);
-                startActivity(navigationIntent);
-            } else if (id == R.id.Create_Group) {
-                navigationIntent = new Intent(Chatroom.this, CreateGroupActivity.class);
-                startActivity(navigationIntent);
-            } else {
-                String selectedGroupName = item.getTitle().toString();
-                Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
-                if (groupNames.contains(selectedGroupName)) {
-                    String membersString = sharedPreferences.getString(selectedGroupName + "_members", "");
-                    List<String> membersList = new ArrayList<>();
-                    if (!membersString.isEmpty()) {
-                        String[] membersArray = membersString.split(",");
-                        for (String member : membersArray) {
-                            membersList.add(member.trim());
-                        }
-                    }
-                    navigationIntent = new Intent(Chatroom.this, Chatroom.class);
-                    navigationIntent.putExtra("groupName", selectedGroupName);
-                    navigationIntent.putStringArrayListExtra("members", new ArrayList<>(membersList));
-                    startActivity(navigationIntent);
-                }
-            }
-
-            if (drawerLayout != null) {
-                drawerLayout.closeDrawer(GravityCompat.START);
-            }
-            return true;
-        });
+        // 設置 NavigationView 監聽器
+        navigationView.setNavigationItemSelectedListener(this::handleNavigationItemSelected);
     }
 
-    private void checkInvitationStatus() {
-
+    public void checkInvitationStatus() {
         dbHelper.syncInvitations(this, new RegisterDatabaseHelper.SyncCallback() {
             @Override
             public void onSyncComplete(boolean success) {
@@ -258,38 +228,18 @@ public class Chatroom extends AppCompatActivity {
                         return;
                     }
                     List<Invitation> pendingInvitations = dbHelper.getPendingInvitations(currentUserId);
-                    hasAcceptedInvitation = true;
+                    Log.d("Chatroom", "Pending invitations for " + currentUserId + ": " + pendingInvitations.size());
 
-                    if (members != null && !members.isEmpty() && members.get(0).equals(currentUsername)) {
-                        hasAcceptedInvitation = true;
-                        Log.d("Chatroom", "User is group creator, auto-accepted");
-                    } else {
+                    if (!pendingInvitations.isEmpty()) {
                         for (Invitation invitation : pendingInvitations) {
                             if ("pending".equals(invitation.getStatus())) {
-                                hasAcceptedInvitation = false;
                                 showInvitationDialog(invitation);
-                                break;
+                                break; // 只顯示第一個待處理邀請
                             }
                         }
                     }
 
-                    if (hasAcceptedInvitation) {
-                        SQLiteDatabase db = dbHelper.getRegisterDatabase();
-                        Cursor cursor = db.query(TABLE_INVITATIONS,
-                                new String[]{COL_STATUS},
-                                COL_INVITED_USER + "=? AND " + COL_GROUP_NAME + "=?",
-                                new String[]{currentUsername, groupName},
-                                null, null, null);
-                        if (cursor.moveToFirst()) {
-                            String status = cursor.getString(cursor.getColumnIndexOrThrow(COL_STATUS));
-                            hasAcceptedInvitation = "accepted".equals(status);
-                        } else {
-                            hasAcceptedInvitation = members.contains(currentUsername);
-                        }
-                        cursor.close();
-                    }
-
-                    Log.d("Chatroom", "User: " + currentUsername + ", Group: " + groupName + ", hasAcceptedInvitation: " + hasAcceptedInvitation);
+                    // 更新 UI 和導航菜單
                     updateUI();
                     updateNavigationMenu();
                 });
@@ -337,7 +287,6 @@ public class Chatroom extends AppCompatActivity {
     }
 
     public void onSendButtonClick(View view) {
-        EditText editTextMessage = findViewById(R.id.editTextMessage);
         String message = editTextMessage.getText().toString().trim();
         if (message.isEmpty()) {
             Toast.makeText(this, "Message cannot be empty", Toast.LENGTH_SHORT).show();
@@ -376,7 +325,6 @@ public class Chatroom extends AppCompatActivity {
                         JSONObject jsonResponse = new JSONObject(responseData);
                         if (jsonResponse.has("success") && jsonResponse.getBoolean("success")) {
                             Log.d("Chatroom", "Message uploaded successfully, ID: " + messageId + ", Response: " + responseData);
-                            // 伺服器確認後更新本地同步狀態（可選）
                             if (dbHelper != null) {
                                 dbHelper.updateMessageSyncStatus(messageId, 1);
                             }
@@ -478,7 +426,7 @@ public class Chatroom extends AppCompatActivity {
                         RegisterDatabaseHelper.COL_MESSAGE, RegisterDatabaseHelper.COL_TIMESTAMP},
                 COL_GROUP_NAME + "=?",
                 new String[]{groupName},
-                null, null, RegisterDatabaseHelper.COL_TIMESTAMP + " ASC"); // 確保按時間戳升序
+                null, null, RegisterDatabaseHelper.COL_TIMESTAMP + " ASC");
 
         List<String> newMessages = new ArrayList<>();
         if (cursor.moveToFirst()) {
@@ -488,7 +436,7 @@ public class Chatroom extends AppCompatActivity {
                 long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_TIMESTAMP));
                 String fullMessage = sender + ": " + message + " (" + formatTimestamp(timestamp) + ")";
                 newMessages.add(fullMessage);
-                lastMessageId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE_ID)); // 更新 lastMessageId
+                lastMessageId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE_ID));
             } while (cursor.moveToNext());
         }
         cursor.close();
@@ -505,6 +453,10 @@ public class Chatroom extends AppCompatActivity {
     }
 
     public void onInvitationAccepted(String invitationId) {
+        if (dbHelper == null) {
+            Log.e("Chatroom", "dbHelper is null, cannot process invitation");
+            return;
+        }
         dbHelper.updateInvitationStatus(invitationId, "accepted");
         checkInvitationStatus();
 
@@ -512,18 +464,15 @@ public class Chatroom extends AppCompatActivity {
             String groupName = getGroupNameFromInvitation(invitationId);
             if (groupName != null) {
                 String membersString = sharedPreferences.getString(groupName + "_members", "");
-                List<String> members = new ArrayList<>();
+                members = new ArrayList<>();
                 if (!membersString.isEmpty()) {
                     String[] membersArray = membersString.split(",");
                     for (String member : membersArray) {
-                        members.add(member.trim());
+                        String cleanMember = member.trim();
+                        String userId = cleanMember.contains("(") ? cleanMember.substring(cleanMember.indexOf("(") + 1, cleanMember.indexOf(")")) : dbHelper.getUserIdFromUsername(cleanMember);
+                        if (userId != null) members.add(userId);
                     }
                 }
-                Intent intent = new Intent(Chatroom.this, Chatroom.class);
-                intent.putExtra("groupName", groupName);
-                intent.putStringArrayListExtra("members", new ArrayList<>(members));
-                startActivity(intent);
-                finish();
             } else {
                 Log.e("Chatroom", "Failed to get group name for invitation ID: " + invitationId);
                 Toast.makeText(Chatroom.this, "無法找到群組", Toast.LENGTH_SHORT).show();
@@ -532,6 +481,10 @@ public class Chatroom extends AppCompatActivity {
     }
 
     private String getGroupNameFromInvitation(String invitationId) {
+        if (dbHelper == null) {
+            Log.e("Chatroom", "dbHelper is null, cannot query group name");
+            return null;
+        }
         SQLiteDatabase db = dbHelper.getRegisterDatabase();
         Cursor cursor = db.query(RegisterDatabaseHelper.TABLE_INVITATIONS,
                 new String[]{RegisterDatabaseHelper.COL_GROUP_NAME},
@@ -565,8 +518,11 @@ public class Chatroom extends AppCompatActivity {
         checkInvitationStatus();
         isPollingActive = true;
         registerReceiver(invitationReceiver, new IntentFilter("com.example.cameraproject_2.INVITATION_UPDATED"), Context.RECEIVER_NOT_EXPORTED);
-        loadMessagesFromDatabase(); // 確保切換回來時加載最新數據
+        loadMessagesFromDatabase();
         startMessagePolling();
+
+        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
+        dbHelper.checkInvitationStatus(currentUserId); // currentUserId 為 XDGXC 或 1
     }
 
     @Override
@@ -580,9 +536,11 @@ public class Chatroom extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         isPollingActive = false;
-        executorService.shutdown();
+        if (executorService != null) {
+            executorService.shutdown();
+        }
         if (dbHelper != null) {
-            dbHelper.setOnMessageInsertedListener(null); // 取消監聽
+            dbHelper.setOnMessageInsertedListener(null);
             dbHelper.closeDatabase();
         }
     }
@@ -596,7 +554,52 @@ public class Chatroom extends AppCompatActivity {
     }
 
     private void setupDrawer() {
-        // 實現抽屜菜單的設置邏輯
+        // 實現抽屜菜單的設置邏輯（目前留空）
+    }
+
+    private boolean handleNavigationItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        Intent navigationIntent = null;
+
+        if (id == R.id.nav_logout) {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putBoolean("isLoggedIn", false);
+            editor.putString("loggedInUser", "訪客");
+            editor.putString("userId", "訪客");
+            editor.apply();
+            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
+            navigationIntent = new Intent(Chatroom.this, PersonalAccount.class);
+            startActivity(navigationIntent);
+            finish();
+        } else if (id == R.id.Chat_room) {
+            navigationIntent = new Intent(Chatroom.this, MainActivity.class);
+            startActivity(navigationIntent);
+        } else if (id == R.id.Create_Group) {
+            navigationIntent = new Intent(Chatroom.this, CreateGroupActivity.class);
+            startActivity(navigationIntent);
+        } else {
+            String selectedGroupName = item.getTitle().toString();
+            Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+            if (groupNames.contains(selectedGroupName)) {
+                String membersString = sharedPreferences.getString(selectedGroupName + "_members", "");
+                List<String> membersList = new ArrayList<>();
+                if (!membersString.isEmpty()) {
+                    String[] membersArray = membersString.split(",");
+                    for (String member : membersArray) {
+                        membersList.add(member.trim());
+                    }
+                }
+                navigationIntent = new Intent(Chatroom.this, Chatroom.class);
+                navigationIntent.putExtra("groupName", selectedGroupName);
+                navigationIntent.putStringArrayListExtra("members", new ArrayList<>(membersList));
+                startActivity(navigationIntent);
+            }
+        }
+
+        if (drawerLayout != null) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
+        return true;
     }
 
     private void updateNavigationMenu() {

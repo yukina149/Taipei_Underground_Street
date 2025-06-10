@@ -5,11 +5,12 @@ public class Invitation {
     private String groupName;
     private String status;
 
-    public Invitation(String invitationId, String groupName) {
+    public Invitation(String invitationId, String groupName, String status) {
         this.invitationId = invitationId;
         this.groupName = groupName;
-        this.status = status;
+        this.status = status; // 修正為正確初始化 status
     }
+
     public String getStatus() {
         return status;
     }

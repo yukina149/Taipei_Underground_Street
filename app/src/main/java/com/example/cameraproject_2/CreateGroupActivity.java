@@ -139,6 +139,48 @@ public class CreateGroupActivity extends AppCompatActivity {
         });
     }
 
+    public void onCreateGroupClick(View view) {
+        EditText editTextGroupName = findViewById(R.id.editTextGroupName);
+        String groupName = editTextGroupName.getText().toString().trim();
+        if (groupName.isEmpty()) {
+            Toast.makeText(this, "Please enter a group name", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        List<String> selectedMembers = memberAdapter.getSelectedMembers();
+        if (selectedMembers.isEmpty()) {
+            Toast.makeText(this, "Please select at least one member", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        dbHelper = new RegisterDatabaseHelper(this);
+        for (String userId : selectedMembers) {
+            dbHelper.addGroupInvitation(groupName, userId, new RegisterDatabaseHelper.SyncCallback() {
+                @Override
+                public void onSyncComplete(boolean success) {
+                    if (success) {
+                        Log.d("CreateGroupActivity", "Successfully added invitation for user: " + userId);
+                    } else {
+                        Log.e("CreateGroupActivity", "Invitation sync failed for user: " + userId);
+                    }
+                }
+            });
+        }
+
+        // 保存群組和成員到 SharedPreferences
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        Set<String> groupNames = prefs.getStringSet("groupNames", new HashSet<>());
+        groupNames.add(groupName);
+        editor.putStringSet("groupNames", groupNames);
+        editor.putString(groupName + "_members", String.join(",", selectedMembers));
+        editor.apply();
+
+        Log.d("CreateGroupActivity", "Saved group: " + groupName + " with members: " + String.join(", ", selectedMembers));
+        Toast.makeText(this, "Group created: " + groupName, Toast.LENGTH_SHORT).show();
+        finish();
+    }
+
     private void saveGroup(String groupName, List<String> members) {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
