@@ -58,6 +58,10 @@ public class CreateGroupActivity extends AppCompatActivity {
         memberRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         memberRecyclerView.setAdapter(memberAdapter);
 
+        if (dbHelper == null) {
+            dbHelper = new RegisterDatabaseHelper(this);
+        }
+
         buttonSearchMember.setOnClickListener(v -> {
             String memberId = editTextMemberId.getText().toString().trim();
             if (memberId.isEmpty()) {
@@ -280,6 +284,7 @@ public class CreateGroupActivity extends AppCompatActivity {
         super.onDestroy();
         if (dbHelper != null) {
             dbHelper.closeDatabase();
+            dbHelper = null;
         }
     }
 }

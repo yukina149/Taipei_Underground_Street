@@ -33,6 +33,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -53,6 +55,7 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationView;
 import com.unity3d.player.UnityPlayerActivity;
 import org.opencv.android.OpenCVLoader;
@@ -82,7 +85,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private static final String KEY_PHOTO_URI = "photoUri";
     private static final String KEY_PHOTO_FILE_PATH = "photoFilePath";
     private static final String KEY_CURRENT_BITMAP_PATH = "currentBitmapPath";
-    private static final String INVITATION_CHECK_URL = "http://192.168.234.200/android_studio/fetch_invitations.php";
+    private static final String INVITATION_CHECK_URL = "http://54.252.173.166/android_studio/fetch_invitations.php";
     private static final String USER_ID_KEY = "userId";
     private static final String LOGGED_IN_USER_KEY = "loggedInUser"; // 儲存登入用戶名稱的鍵
     private static final long CHECK_INTERVAL = 30000; // 每 30 秒檢查一次
@@ -122,22 +125,37 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private String currentUserId;
     private NavigationView navigationView; // 導航視圖成員變量
     private DrawerLayout drawerLayout; // 抽屜佈局成員變量
+    private BottomNavigationView bottomNavigationView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        MyApplication app = (MyApplication) getApplication();
+        app.setLocale(); // 應用全局語言設置
         EdgeToEdge.enable(this);
-        setContentView(R.layout.activity_main); // 確保佈局設置
+        setContentView(R.layout.activity_main);
+
+        // 初始化 currentLocationTextView
+        currentLocationTextView = findViewById(R.id.currentLocationTextView);
+        if (currentLocationTextView == null) {
+            Log.e("MainActivity", "currentLocationTextView 未在佈局中找到，檢查 activity_main.xml");
+            Toast.makeText(this, "應用程式初始化失敗，請聯繫開發者", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
 
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-        // 檢查是否已登入，並獲取用戶 ID 和名稱
         currentUserId = sharedPreferences.getString(USER_ID_KEY, "訪客");
         String loggedInUser = sharedPreferences.getString(LOGGED_IN_USER_KEY, "訪客");
 
+        // 設置 currentLocationTextView 的文字
+        currentLocationTextView.setText(getString(R.string.current_location_label) + currentLocation);
+
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
+        bottomNavigationView = findViewById(R.id.bottom_navigation);
 
-        if (drawerLayout == null || navigationView == null) {
+        if (drawerLayout == null || navigationView == null || bottomNavigationView == null) {
             Toast.makeText(this, "導航設置失敗", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -156,6 +174,38 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
         updateNavigationMenu(); // 在確保 navigationView 初始化後呼叫
         updateHeader(); // 更新導航頭部資訊
+
+        // 設置底部導航欄的點擊事件並應用動畫
+        bottomNavigationView.setOnNavigationItemSelectedListener(item -> {
+            int id = item.getItemId();
+            resetNavigationItems();
+            applySelectedEffect(item);
+
+            if (id == R.id.navigation_home) {
+                Toast.makeText(this, R.string.home_page, Toast.LENGTH_SHORT).show();
+            } else if (id == R.id.nav_chat) {
+                boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
+                if (isLoggedIn) {
+                    Intent intent = new Intent(MainActivity.this, Chatroom.class);
+                    startActivity(intent);
+                } else {
+                    Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
+                    startActivity(intent);
+                }
+            } else if (id == R.id.nav_member) {
+                Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
+                startActivity(intent);
+            } else if (id == R.id.nav_info) {
+                Toast.makeText(this, R.string.taipei_info, Toast.LENGTH_SHORT).show();
+            } else if (id == R.id.nav_settings) {
+                Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+                startActivity(intent);
+            }
+            return true;
+        });
+
+        // 設置默認選中首頁
+        bottomNavigationView.setSelectedItemId(R.id.navigation_home);
 
         registerDbHelper = new RegisterDatabaseHelper(this);
         pictureDbHelper = new PictureDatabaseHelper(this);
@@ -393,6 +443,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             TextView accountValueText = headerView.findViewById(R.id.textViewAccountValue);
 
             if (usernameValueText != null && accountValueText != null) {
+                Log.d("MainActivity", "sharedPreferences: " + (sharedPreferences != null));
                 String loggedInUser = sharedPreferences.getString(LOGGED_IN_USER_KEY, "訪客");
                 usernameValueText.setText(loggedInUser);
                 accountValueText.setText(currentUserId);
@@ -485,19 +536,19 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             startActivity(intent);
         } else if (id == R.id.nav_logout) {
             new AlertDialog.Builder(this)
-                    .setTitle("確認登出")
-                    .setMessage("您確定要登出嗎？")
-                    .setPositiveButton("確定", (dialog, which) -> {
+                    .setTitle(R.string.account_logout_confirm)
+                    .setMessage(getString(R.string.account_logout_confirm))
+                    .setPositiveButton(android.R.string.ok, (dialog, which) -> {
                         SharedPreferences.Editor editor = sharedPreferences.edit();
                         editor.remove("loggedInUser");
                         editor.putBoolean("isLoggedIn", false);
                         editor.putString("userId", "訪客");
                         editor.apply();
-                        Toast.makeText(this, "已登出", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.account_logout_success, Toast.LENGTH_SHORT).show();
                         Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
                         startActivity(intent);
                     })
-                    .setNegativeButton("取消", null)
+                    .setNegativeButton(android.R.string.cancel, null)
                     .show();
         } else {
             // 處理動態添加的群組
@@ -840,16 +891,16 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private void showInvitationDialog(String groupName, String invitationId) {
         new AlertDialog.Builder(this)
-                .setTitle("群組邀請")
-                .setMessage("您被邀請加入群組: " + groupName)
-                .setPositiveButton("接受", (dialog, which) -> {
+                .setTitle(R.string.group_invitation_title)
+                .setMessage(getString(R.string.group_invitation_message, groupName))
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
                     registerDbHelper.updateInvitationStatus(invitationId, "accepted");
-                    Toast.makeText(this, "已接受群組邀請：" + groupName, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.accept_invitation_success, groupName), Toast.LENGTH_SHORT).show();
                     dialog.dismiss();
                 })
-                .setNegativeButton("拒絕", (dialog, which) -> {
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> {
                     registerDbHelper.updateInvitationStatus(invitationId, "rejected");
-                    Toast.makeText(this, "已拒絕群組邀請：" + groupName, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.reject_invitation_success, groupName), Toast.LENGTH_SHORT).show();
                     dialog.dismiss();
                 })
                 .setCancelable(false)
@@ -875,8 +926,8 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "invitation_channel")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("新群組邀請")
-                .setContentText("您收到來自群組 " + groupName + " 的邀請")
+                .setContentTitle(getString(R.string.new_group_notification_title))
+                .setContentText(getString(R.string.new_group_notification_message, groupName))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true);
 
@@ -950,6 +1001,30 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_PERMISSION_CODE);
             }
+        }
+    }
+
+    // 重置所有導航項的狀態
+    private void resetNavigationItems() {
+        Menu menu = bottomNavigationView.getMenu();
+        for (int i = 0; i < menu.size(); i++) {
+            MenuItem item = menu.getItem(i);
+            View view = bottomNavigationView.findViewById(item.getItemId());
+            if (view != null) {
+                Animation scaleDown = AnimationUtils.loadAnimation(this, R.anim.scale_down);
+                view.startAnimation(scaleDown);
+                view.setElevation(0f); // 移除陰影
+            }
+        }
+    }
+
+    // 應用選中效果（放大並添加陰影）
+    private void applySelectedEffect(MenuItem item) {
+        View view = bottomNavigationView.findViewById(item.getItemId());
+        if (view != null) {
+            Animation scaleUp = AnimationUtils.loadAnimation(this, R.anim.scale_up);
+            view.startAnimation(scaleUp);
+            view.setElevation(8f); // 添加陰影效果
         }
     }
 }

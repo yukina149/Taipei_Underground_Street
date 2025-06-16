@@ -17,6 +17,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -81,13 +82,26 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private static final String KEY_LAST_SYNC_TIME = "last_sync_time";
 
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
-    private static String SERVER_URL = "http://192.168.234.200/android_studio";
+    private static String SERVER_URL = "http://54.252.173.166/android_studio";
 
+
+    /*
     public RegisterDatabaseHelper(Context context) {
         super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
         this.context = context;
         loadServerUrl();
         checkDatabaseIntegrity();
+    }
+
+     */
+
+    public RegisterDatabaseHelper(Context context) {
+        super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
+        this.context = context;
+        SERVER_URL = "http://54.252.173.166/android_studio"; // 強制設置
+        loadServerUrl(); // 載入後確認
+        checkDatabaseIntegrity();
+        Log.d(TAG, "初始化 SERVER_URL: " + SERVER_URL);
     }
 
     public void fetchInvitationsFromServer(Context context, String userId, String lastSyncTime, SyncCallback callback) {
@@ -121,6 +135,15 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             }
         });
     }
+    public boolean isInvitationAccepted(String userId, String groupName) {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_INVITATIONS, new String[]{COL_STATUS},
+                COL_INVITED_USER + "=? AND " + COL_GROUP_NAME + "=? AND " + COL_STATUS + "=?",
+                new String[]{userId, groupName, "accepted"}, null, null, null);
+        boolean isAccepted = cursor.getCount() > 0;
+        cursor.close();
+        return isAccepted;
+    }
 
     public void insertInvitation(String invitationId, String groupName, String invitedUser, String status, int isSynced) {
         SQLiteDatabase db = getRegisterDatabase();
@@ -138,12 +161,27 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             Log.e(TAG, "Failed to insert invitation: " + invitationId);
         }
     }
+    /*
 
     private void loadServerUrl() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String defaultUrl = "http://192.168.234.200/android_studio";
+        String defaultUrl = "http://192.168.10.15/android_studio";
         SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
         Log.d(TAG, "Loaded server URL from prefs: " + SERVER_URL);
+    }
+
+     */
+    private void loadServerUrl() {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String defaultUrl = "http://54.252.173.166/android_studio";
+        SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
+        Log.d(TAG, "載入的 SERVER_URL: " + SERVER_URL);
+        // 清除舊值（僅在調試時使用）
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.remove(KEY_SERVER_URL); // 移除舊地址
+        editor.apply();
+        SERVER_URL = defaultUrl; // 強制使用預設值
+        Log.d(TAG, "更新後的 SERVER_URL: " + SERVER_URL);
     }
 
     public void setServerUrl(String url) {
@@ -415,6 +453,11 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 Log.e(TAG, "Context is null, cannot send broadcast");
             }
         });
+    }
+    public void deleteUserData(String userId) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete("users", "userId = ?", new String[]{userId});
+        db.close();
     }
 
     public interface SyncCallback {
@@ -1008,6 +1051,25 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         } else {
             Log.e(TAG, "Failed to update sync status for messageId: " + messageId);
         }
+    }
+
+    public String getPendingInvitationId(String userId, String groupName) {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_INVITATIONS,
+                new String[]{COL_INVITATION_ID},
+                COL_INVITED_USER + " = ? AND " + COL_GROUP_NAME + " = ? AND " + COL_STATUS + " = ?",
+                new String[]{userId, groupName, "pending"},
+                null, null, null);
+
+        String invitationId = null;
+        if (cursor.moveToFirst()) {
+            invitationId = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITATION_ID));
+            Log.d(TAG, "Found pending invitation ID: " + invitationId + " for user: " + userId + ", group: " + groupName);
+        } else {
+            Log.d(TAG, "No pending invitation found for user: " + userId + ", group: " + groupName);
+        }
+        cursor.close();
+        return invitationId;
     }
 
     private void uploadUnsyncedInvitations() throws IOException, JSONException {
