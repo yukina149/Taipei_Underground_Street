@@ -10,228 +10,247 @@
     tools:context=".MainActivity"
     tools:openDrawer="start">
 
-    <ScrollView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingTop="20dp">
+        android:orientation="vertical">
 
-        <RelativeLayout
-            android:id="@+id/main_layout"
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/cut_card_background"
-            tools:context=".MainActivity">
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingTop="20dp">
 
-            <!-- 菜單圖標 -->
-            <ImageView
-                android:id="@+id/menuIcon"
-                android:layout_width="50dp"
-                android:layout_height="50dp"
-                android:layout_margin="12dp"
-                android:layout_marginRight="10dp"
-                android:src="@drawable/ic_menu"/>
-
-            <!-- APP 名稱 -->
-            <TextView
-                android:id="@+id/app_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_centerHorizontal="true"
-                android:layout_margin="12dp"
-                android:text="Unlost"
-                android:fontFamily="sans-serif-black"
-                android:textColor="@color/color_gray"
-                android:textSize="30sp"
-                android:textStyle="bold"/>
-
-            <androidx.constraintlayout.widget.ConstraintLayout
+            <RelativeLayout
+                android:id="@+id/main_layout"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
+                android:layout_height="match_parent"
+                android:background="@drawable/cut_card_background"
+                tools:context=".MainActivity">
 
-                <!-- 大地圖 -->
+                <!-- 菜單圖標 -->
                 <ImageView
-                    android:id="@+id/bigmap"
-                    android:layout_width="300dp"
-                    android:layout_height="200dp"
-                    android:layout_marginStart="5dp"
-                    android:layout_marginTop="68dp"
-                    android:layout_marginEnd="5dp"
-                    android:src="@drawable/ic_bigmap"
-                    app:layout_constraintEnd_toStartOf="@+id/smallmap"
-                    app:layout_constraintHorizontal_bias="0.529"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                    android:id="@+id/menuIcon"
+                    android:layout_width="50dp"
+                    android:layout_height="50dp"
+                    android:layout_margin="12dp"
+                    android:layout_marginRight="10dp"
+                    android:src="@drawable/ic_menu"/>
 
-                <!-- 小地圖 -->
-                <ImageView
-                    android:id="@+id/smallmap"
-                    android:layout_width="100dp"
-                    android:layout_height="200dp"
-                    android:layout_marginStart="250dp"
-                    android:layout_marginTop="68dp"
-                    android:layout_marginEnd="5dp"
-                    android:src="@drawable/ic_bigmap"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.761"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                <!-- APP 名稱 -->
+                <TextView
+                    android:id="@+id/app_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerHorizontal="true"
+                    android:layout_margin="12dp"
+                    android:text="Unlost"
+                    android:fontFamily="sans-serif-black"
+                    android:textColor="@color/color_gray"
+                    android:textSize="30sp"
+                    android:textStyle="bold"/>
 
                 <androidx.constraintlayout.widget.ConstraintLayout
-                    android:id="@+id/constraintLayout2"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/bigmap">
+                    android:layout_height="match_parent">
 
-                    <!-- 當前位置 -->
-                    <TextView
-                        android:id="@+id/currentLocationTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="43dp"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginTop="8dp"
-                        android:layout_marginEnd="10dp"
-                        android:gravity="center"
-                        android:text="現在位於："
-                        android:textColor="#FAFFFFFF"
-                        android:textSize="24sp"
-                        android:textStyle="bold"
-                        app:layout_constraintEnd_toEndOf="parent"
+                    <!-- 大地圖 -->
+                    <ImageView
+                        android:id="@+id/bigmap"
+                        android:layout_width="300dp"
+                        android:layout_height="200dp"
+                        android:layout_marginStart="5dp"
+                        android:layout_marginTop="68dp"
+                        android:layout_marginEnd="5dp"
+                        android:src="@drawable/ic_bigmap"
+                        app:layout_constraintEnd_toStartOf="@+id/smallmap"
+                        app:layout_constraintHorizontal_bias="0.529"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="parent" />
 
-                    <!-- 按鈕：定位錯誤 -->
-                    <Button
-                        android:id="@+id/buttonIncorrectLocation"
-                        android:layout_width="250dp"
-                        android:layout_height="60dp"
-                        android:layout_marginStart="99dp"
-                        android:layout_marginTop="8dp"
-                        android:layout_marginEnd="99dp"
-                        android:backgroundTint="#FFFFFB"
-                        android:enabled="false"
-                        android:text="定位錯誤"
-                        android:textColor="#000000"
-                        android:textSize="20sp"
-                        android:textStyle="bold"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@+id/currentLocationTextView" />
-
-                    <!-- 圖片與相機卡片 -->
-                    <LinearLayout
-                        android:id="@+id/L1"
-                        android:layout_width="0dp"
+                    <!-- 小地圖 -->
+                    <ImageView
+                        android:id="@+id/smallmap"
+                        android:layout_width="100dp"
                         android:layout_height="200dp"
-                        android:layout_marginStart="1dp"
-                        android:layout_marginTop="24dp"
-                        android:layout_marginEnd="1dp"
-                        android:orientation="horizontal"
-                        android:padding="10dp"
+                        android:layout_marginStart="250dp"
+                        android:layout_marginTop="68dp"
+                        android:layout_marginEnd="5dp"
+                        android:src="@drawable/ic_bigmap"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintHorizontal_bias="0.761"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:id="@+id/constraintLayout2"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@+id/buttonIncorrectLocation">
+                        app:layout_constraintTop_toBottomOf="@+id/bigmap">
 
-                        <androidx.cardview.widget.CardView
-                            android:id="@+id/cardPicture"
+                        <!-- 當前位置 -->
+                        <TextView
+                            android:id="@+id/currentLocationTextView"
                             android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_margin="20dp"
-                            android:layout_weight="1"
-                            app:cardCornerRadius="20dp">
+                            android:layout_height="43dp"
+                            android:layout_marginStart="10dp"
+                            android:layout_marginTop="8dp"
+                            android:layout_marginEnd="10dp"
+                            android:gravity="center"
+                            android:text="@string/location_unknown"
+                            android:textColor="#FAFFFFFF"
+                            android:textSize="24sp"
+                            android:textStyle="bold"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent" />
 
-                            <RelativeLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent">
+                        <!-- 按鈕：定位錯誤 -->
+                        <Button
+                            android:id="@+id/buttonIncorrectLocation"
+                            android:layout_width="250dp"
+                            android:layout_height="60dp"
+                            android:layout_marginStart="99dp"
+                            android:layout_marginTop="8dp"
+                            android:layout_marginEnd="99dp"
+                            android:backgroundTint="#FFFFFB"
+                            android:enabled="false"
+                            android:text="@string/incorrect_location"
+                            android:textColor="#000000"
+                            android:textSize="20sp"
+                            android:textStyle="bold"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toBottomOf="@+id/currentLocationTextView" />
 
-                                <ImageView
-                                    android:id="@+id/picture"
-                                    android:layout_width="75dp"
-                                    android:layout_height="75dp"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="20dp"
-                                    android:src="@drawable/ic_picture" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_below="@id/picture"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="10dp"
-                                    android:text="Picture"
-                                    android:textColor="@color/color_gray"
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </RelativeLayout>
-                        </androidx.cardview.widget.CardView>
-
-                        <androidx.cardview.widget.CardView
-                            android:id="@+id/cardCamera"
+                        <!-- 圖片與相機卡片 -->
+                        <LinearLayout
+                            android:id="@+id/L1"
                             android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_margin="20dp"
-                            android:layout_weight="1"
-                            app:cardCornerRadius="20dp">
+                            android:layout_height="200dp"
+                            android:layout_marginStart="1dp"
+                            android:layout_marginTop="24dp"
+                            android:layout_marginEnd="1dp"
+                            android:orientation="horizontal"
+                            android:padding="10dp"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toBottomOf="@+id/buttonIncorrectLocation">
 
-                            <RelativeLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent">
+                            <androidx.cardview.widget.CardView
+                                android:id="@+id/cardPicture"
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_margin="20dp"
+                                android:layout_weight="1"
+                                app:cardCornerRadius="20dp">
 
-                                <ImageView
-                                    android:id="@+id/camera"
-                                    android:layout_width="75dp"
-                                    android:layout_height="75dp"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="20dp"
-                                    android:src="@drawable/ic_camera" />
+                                <RelativeLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent">
 
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_below="@id/camera"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="10dp"
-                                    android:text="Camera"
-                                    android:textColor="@color/color_gray"
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </RelativeLayout>
-                        </androidx.cardview.widget.CardView>
-                    </LinearLayout>
+                                    <ImageView
+                                        android:id="@+id/picture"
+                                        android:layout_width="75dp"
+                                        android:layout_height="75dp"
+                                        android:layout_centerHorizontal="true"
+                                        android:layout_marginTop="20dp"
+                                        android:src="@drawable/ic_picture" />
 
-                    <!-- 按鈕：開始導航 -->
-                    <Button
-                        android:id="@+id/buttonCorrectLocation"
-                        android:layout_width="250dp"
-                        android:layout_height="60dp"
-                        android:layout_marginStart="99dp"
-                        android:layout_marginTop="8dp"
-                        android:layout_marginEnd="99dp"
-                        android:backgroundTint="#FFFFFB"
-                        android:enabled="false"
-                        android:text="開始導航"
-                        android:textColor="#000000"
-                        android:textSize="20sp"
-                        android:textStyle="bold"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@+id/L1" />
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_below="@id/picture"
+                                        android:layout_centerHorizontal="true"
+                                        android:layout_marginTop="10dp"
+                                        android:text="@string/picture"
+                                        android:textColor="@color/color_gray"
+                                        android:textSize="20sp"
+                                        android:textStyle="bold" />
+                                </RelativeLayout>
+                            </androidx.cardview.widget.CardView>
 
-                    <!-- 佔位 TextView -->
-                    <TextView
-                        android:id="@+id/textView3"
-                        android:layout_width="0dp"
-                        android:layout_height="100dp"
-                        android:layout_marginTop="8dp"
-                        android:textSize="50sp"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@+id/buttonCorrectLocation" />
+                            <androidx.cardview.widget.CardView
+                                android:id="@+id/cardCamera"
+                                android:layout_width="0dp"
+                                android:layout_height="match_parent"
+                                android:layout_margin="20dp"
+                                android:layout_weight="1"
+                                app:cardCornerRadius="20dp">
+
+                                <RelativeLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent">
+
+                                    <ImageView
+                                        android:id="@+id/camera"
+                                        android:layout_width="75dp"
+                                        android:layout_height="75dp"
+                                        android:layout_centerHorizontal="true"
+                                        android:layout_marginTop="20dp"
+                                        android:src="@drawable/ic_camera" />
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_below="@id/camera"
+                                        android:layout_centerHorizontal="true"
+                                        android:layout_marginTop="10dp"
+                                        android:text="@string/camera"
+                                        android:textColor="@color/color_gray"
+                                        android:textSize="20sp"
+                                        android:textStyle="bold" />
+                                </RelativeLayout>
+                            </androidx.cardview.widget.CardView>
+                        </LinearLayout>
+
+                        <!-- 按鈕：開始導航 -->
+                        <Button
+                            android:id="@+id/buttonCorrectLocation"
+                            android:layout_width="250dp"
+                            android:layout_height="60dp"
+                            android:layout_marginStart="99dp"
+                            android:layout_marginTop="8dp"
+                            android:layout_marginEnd="99dp"
+                            android:backgroundTint="#FFFFFB"
+                            android:enabled="false"
+                            android:text="@string/start_navigation"
+                            android:textColor="#000000"
+                            android:textSize="20sp"
+                            android:textStyle="bold"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toBottomOf="@+id/L1" />
+
+                        <!-- 佔位 TextView -->
+                        <TextView
+                            android:id="@+id/textView3"
+                            android:layout_width="0dp"
+                            android:layout_height="100dp"
+                            android:layout_marginTop="8dp"
+                            android:textSize="50sp"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toBottomOf="@+id/buttonCorrectLocation" />
+                    </androidx.constraintlayout.widget.ConstraintLayout>
                 </androidx.constraintlayout.widget.ConstraintLayout>
-            </androidx.constraintlayout.widget.ConstraintLayout>
-        </RelativeLayout>
-    </ScrollView>
+            </RelativeLayout>
+        </ScrollView>
+
+        <!-- 底部導航欄 -->
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_navigation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            app:menu="@menu/bottom_nav_menu"
+            app:itemIconSize="40dp"
+            app:itemIconTint="@color/my_forth"
+            app:itemTextColor="@color/my_forth"
+            app:labelVisibilityMode="labeled" />
+    </LinearLayout>
 
     <!-- 導航抽屜 -->
     <com.google.android.material.navigation.NavigationView
