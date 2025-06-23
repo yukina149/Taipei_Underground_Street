@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/Chat_room"
+        android:icon="@drawable/store_icon"
+        android:title="主頁" />
+    <item
+        android:id="@+id/Create_Group"
+        android:icon="@drawable/store_icon"
+        android:title="創建群組" />
+    <item
+        android:id="@+id/nav_logout"
+        android:title="Logout" />
+</menu>

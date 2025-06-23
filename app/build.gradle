@@ -13,13 +13,18 @@ android {
         targetSdk 35
         versionCode 1
         versionName "1.0"
+        packagingOptions {
+            jniLibs {
+                useLegacyPackaging true
+            }
+        }
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         //使用python
 
         ndk {
-            abiFilters "arm64-v8a", "x86", "x86_64"
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
 
         python {
@@ -38,6 +43,8 @@ android {
             }
         }
 
+
+
     }
 
     buildTypes {
@@ -47,13 +54,17 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17 //原本使用版本11//之前需要使用改成17
+        targetCompatibility JavaVersion.VERSION_17
+
     }
 
     //除錯用
     packagingOptions {
         pickFirst 'lib/x86_64/libc++_shared.so'
+        jniLibs {
+            useLegacyPackaging true
+        }
     }
     sourceSets {
         main {
@@ -62,7 +73,14 @@ android {
             }
         }
     }
-    ndkVersion '27.0.12077973'
+    //強制使用單一版本
+    configurations.all {
+        resolutionStrategy {
+            force 'com.google.ar.sceneform:core:1.17.1'
+            force 'com.google.ar.sceneform:sceneform-base:1.17.1'
+        }
+    }
+    ndkVersion '23.1.7779620'
 }
 
 dependencies {
@@ -78,21 +96,47 @@ dependencies {
     androidTestImplementation libs.espresso.core
 
 
-    implementation project(':sdk')
+    implementation project(':sdk')//opencv
+    implementation project(':UnityLibrary')//unity
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
     //製作ar core需要的
-    implementation 'com.google.ar:core:1.40.0'
+    //implementation 'com.google.ar:core:1.39.0'
     implementation 'com.google.ar.sceneform:core:1.17.1'
     implementation 'com.google.ar.sceneform:assets:1.17.1'
+    //implementation 'com.google.ar.sceneform.ux:sceneform-ux:1.17.1'
+    //implementation 'dev.romainguy.sceneview:sceneview:1.x.x'
+
+    //implementation 'com.google.ar.sceneform:core:1.18.0'
+    //implementation 'com.google.ar.sceneform.ux:sceneform-ux:1.18.0'
+    //implementation 'com.google.ar:core:1.34.0'
+
+
+    //無金鑰授權
+    implementation 'com.google.android.gms:play-services-auth:16+'
 
     //製作google map地圖需要的
     implementation 'com.google.android.gms:play-services-maps:18.0.2'
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
 
 
+    //unity需要
+    implementation 'com.google.ar:core:1.44.0'
 
 
+    //資料庫權限
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+
+    //動畫(?)
+    implementation 'com.airbnb.android:lottie:3.4.1'
+
+    //群組需要使用
+    implementation 'org.json:json:20230227'
+
+    //訊息框UI
+    implementation 'androidx.cardview:cardview:1.0.0'
+        
 }

@@ -5,38 +5,106 @@
     android:layout_width="match_parent"
     android:layout_height="200dp"
     android:orientation="vertical"
-    android:background="@drawable/cut_card_background"
+    android:background="@color/my_primary"
     android:gravity="bottom"
     android:padding="20dp">
 
-
+    <!-- 圖標 -->
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="75dp"
         android:layout_height="75dp"
         android:layout_marginEnd="16dp"
-        android:src="@drawable/game_icon"
+        android:src="@drawable/home_icon"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.505" />
 
-
+    <!-- 標題文字 -->
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="22dp"
+        android:layout_marginStart="16dp"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="153dp"
+        android:layout_marginEnd="16dp"
         android:layout_marginBottom="17dp"
-        android:fontFamily="serif-monospace"
-        android:text="台北地下街商店一覽"
+        android:fontFamily="sans-serif-black"
+        android:text="Unlost   北車不再迷航"
+        android:textSize="24sp"
+        android:textColor="@color/my_forth"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.025"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/imageView"
+        app:layout_constraintVertical_bias="0.0" />
+
+    <!-- 姓名標籤 -->
+    <TextView
+        android:id="@+id/textViewUsername"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="32dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="72dp"
+        android:fontFamily="sans-serif-black"
+        android:text="姓名："
         android:textSize="24sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.352"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/imageView" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.238" />
+
+    <!-- 姓名值 -->
+    <TextView
+        android:id="@+id/textViewUsernameValue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:fontFamily="sans-serif-black"
+        android:text="訪客"
+        android:textSize="24sp"
+        app:layout_constraintStart_toEndOf="@+id/textViewUsername"
+        app:layout_constraintTop_toTopOf="@+id/textViewUsername"
+        app:layout_constraintBottom_toBottomOf="@+id/textViewUsername" />
+
+    <!-- 帳號標籤 -->
+    <TextView
+        android:id="@+id/textViewAccount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="72dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="32dp"
+        android:fontFamily="sans-serif-black"
+        android:text="帳號："
+        android:textSize="24sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.352"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.523" />
+
+    <!-- 帳號值 -->
+    <TextView
+        android:id="@+id/textViewAccountValue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:fontFamily="sans-serif-black"
+        android:text="訪客"
+        android:textSize="24sp"
+        app:layout_constraintStart_toEndOf="@+id/textViewAccount"
+        app:layout_constraintTop_toTopOf="@+id/textViewAccount"
+        app:layout_constraintBottom_toBottomOf="@+id/textViewAccount" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
