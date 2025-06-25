@@ -14,6 +14,7 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -54,6 +55,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+// 引入你的 FareQueryActivity (假設它在 ui 包下)
+import com.example.cameraproject_2.ui.FareQueryActivity;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
@@ -163,7 +166,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Intent intent = new Intent(MainActivity.this, com.example.cameraproject_2.MapActivity.class);
             startActivity(intent);
         });
-
+        //查詢票價?
+        Button fareQueryButton = findViewById(R.id.button_fare_query);
+        fareQueryButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, FareQueryActivity.class);
+                startActivity(intent);
+            }
+        });
 
         //調用orb location
         // 初始化 ActivityResultLauncher

@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools" package="com.example.cameraproject_2" >
 
+    <!-- 添加網路權限 -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-
+    <!-- 如果你需要檢查網路狀態 (例如，在發起請求前檢查是否有網路), 也可以添加這個 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
@@ -28,6 +31,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CameraProject_2"
+        android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
             android:name=".ARNavigationActivity"
@@ -48,7 +52,17 @@
             </intent-filter>
         </activity>
         <activity android:name=".MapActivity" />
-
+        <activity
+            android:name=".ui.FareQueryActivity"
+            android:exported="true"> <!-- 或者 false，取決於你是否需要從外部啟動 -->
+            <!-- 如果這是你的啟動 Activity，請添加以下 intent-filter -->
+            <!--
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            -->
+        </activity>
         <meta-data
             android:name="com.google.ar.core"
             android:value="required" />

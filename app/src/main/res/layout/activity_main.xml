@@ -264,6 +264,15 @@
                         app:layout_constraintHorizontal_bias="0.0"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/L2">
+                        <Button
+                            android:id="@+id/button_fare_query"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="進入票價查詢"
+                            app:layout_constraintTop_toBottomOf="@id/L3"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            android:layout_marginTop="24dp" />
 
                         <androidx.cardview.widget.CardView
                             android:id="@+id/cardorb"
