@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center">
+
+    <ImageView
+        android:id="@+id/profile_image"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@drawable/star"
+        android:contentDescription="Profile Image"
+        android:scaleType="centerCrop" />
+
+    <Button
+        android:id="@+id/button_change_profile"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="更改頭像"
+        android:layout_marginTop="16dp" />
+
+    <EditText
+        android:id="@+id/edit_text_username"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="修改姓名"
+        android:inputType="text"
+        android:layout_marginTop="16dp"
+        android:maxLines="1" />
+
+    <TextView
+        android:id="@+id/text_view_user_id"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="帳號: "
+        android:layout_marginTop="16dp" />
+
+    <Button
+        android:id="@+id/button_logout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="登出"
+        android:layout_marginTop="16dp" />
+
+</LinearLayout>

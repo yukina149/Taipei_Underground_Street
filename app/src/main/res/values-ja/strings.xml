@@ -69,4 +69,13 @@
     <string name="navigation_info">台北駅地下街情報</string>
     <string name="navigation_settings">設定</string>
 
+    <string name="profile_image">プロフィール画像</string>
+    <string name="change_profile">プロフィール画像を変更</string>
+    <string name="username_hint">名前を入力してください</string>
+    <string name="user_id_label">アカウント: [User ID]</string>
+    <string name="logout">ログアウト</string>
+    <string name="switch_account">別のアカウントでログイン</string>
+    <string name="login">ログイン</string>
+
+
 </resources>

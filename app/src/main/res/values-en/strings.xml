@@ -70,5 +70,14 @@
     <string name="navigation_info">Taipei Main Station Underground Mall Info</string>
     <string name="navigation_settings">Settings</string>
 
+    <string name="profile_image">Profile Image</string>
+    <string name="change_profile">Change Profile Picture</string>
+    <string name="username_hint">Enter Name</string>
+    <string name="user_id_label">Account: [User ID]</string>
+    <string name="logout">Logout</string>
+    <string name="switch_account">Switch Account</string>
+    <string name="login">Login</string>
+
+
 
 </resources>

@@ -24,5 +24,8 @@
     <color name="my_forth">#4a4a4a</color>
     <color name="my_primary_translucent">#B36DB8E3</color>
 
+    <color name="barcolor">#CCEBEE</color>
+    <color name="mainbutton">#AADEE3</color>
+
 
 </resources>

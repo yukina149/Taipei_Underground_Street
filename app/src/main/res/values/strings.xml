@@ -70,4 +70,13 @@
     <string name="navigation_info">北車地下街資訊</string>
     <string name="navigation_settings">設定</string>
 
+    <string name="profile_image">頭像</string>
+    <string name="change_profile">更改頭像</string>
+    <string name="username_hint">輸入姓名</string>
+    <string name="user_id_label">帳號: [User ID]</string>
+    <string name="logout">登出</string>
+    <string name="switch_account">登入其他帳號</string>
+    <string name="login">登入</string>
+
+
 </resources>
