@@ -7,6 +7,7 @@ import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_USERNAME;
 import static com.example.cameraproject_2.RegisterDatabaseHelper.TABLE_NAME;
 import static org.opencv.android.NativeCameraView.TAG;
 
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
@@ -54,8 +55,9 @@ public class UserProfileActivity extends AppCompatActivity {
     private Button buttonLogout;
     private Button buttonChangeProfile;
     private Button buttonConfirmUsername;
+    private Button buttonChangePassword;
     private ActivityResultLauncher<Intent> pickImageLauncher;
-    private String originalUsername; // 儲存原始用戶名
+    private String originalUsername;
     private String userId;
 
     @Override
@@ -73,6 +75,7 @@ public class UserProfileActivity extends AppCompatActivity {
         buttonLogout = findViewById(R.id.button_logout);
         buttonChangeProfile = findViewById(R.id.button_change_profile);
         buttonConfirmUsername = findViewById(R.id.button_confirm_username);
+        buttonChangePassword = findViewById(R.id.button_change_password);
 
         // 設置圖片選擇啟動器
         pickImageLauncher = registerForActivityResult(
@@ -95,7 +98,7 @@ public class UserProfileActivity extends AppCompatActivity {
         Intent intent = getIntent();
         boolean isLoggedIn = intent.getBooleanExtra("isLoggedIn", sharedPreferences.getBoolean("isLoggedIn", false));
         String loggedInUser = intent.getStringExtra("username");
-        userId = intent.getStringExtra("userId"); // 初始化 userId
+        userId = intent.getStringExtra("userId");
         if (loggedInUser == null) loggedInUser = sharedPreferences.getString("loggedInUser", "未知用戶");
         if (userId == null) userId = sharedPreferences.getString("userId", "未知 ID");
 
@@ -164,6 +167,9 @@ public class UserProfileActivity extends AppCompatActivity {
             });
 
             buttonChangeProfile.setOnClickListener(v -> changeProfileImage());
+
+            buttonChangePassword.setOnClickListener(v -> showChangePasswordDialog());
+
             buttonLogout.setOnClickListener(v -> logout());
         } else {
             editTextUsername.setText("");
@@ -171,11 +177,99 @@ public class UserProfileActivity extends AppCompatActivity {
             buttonChangeProfile.setVisibility(View.GONE);
             buttonLogout.setVisibility(View.GONE);
             buttonConfirmUsername.setVisibility(View.GONE);
+            buttonChangePassword.setVisibility(View.GONE);
             profileImage.setImageResource(R.drawable.user);
             Toast.makeText(this, "請先登入", Toast.LENGTH_SHORT).show();
             Intent personalIntent = new Intent(this, PersonalAccount.class);
             startActivity(personalIntent);
             finish();
+        }
+    }
+
+    private void showChangePasswordDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_change_password, null);
+        builder.setView(dialogView);
+
+        EditText editTextCurrentPassword = dialogView.findViewById(R.id.edit_text_current_password);
+        EditText editTextNewPassword = dialogView.findViewById(R.id.edit_text_new_password);
+        EditText editTextConfirmNewPassword = dialogView.findViewById(R.id.edit_text_confirm_new_password);
+        Button buttonCancel = dialogView.findViewById(R.id.button_cancel);
+        Button buttonConfirm = dialogView.findViewById(R.id.button_confirm);
+
+        AlertDialog dialog = builder.create();
+
+        buttonCancel.setOnClickListener(v -> dialog.dismiss());
+
+        buttonConfirm.setOnClickListener(v -> {
+            String currentPassword = editTextCurrentPassword.getText().toString().trim();
+            String newPassword = editTextNewPassword.getText().toString().trim();
+            String confirmNewPassword = editTextConfirmNewPassword.getText().toString().trim();
+
+            if (currentPassword.isEmpty()) {
+                editTextCurrentPassword.setError("請輸入當前密碼");
+                editTextCurrentPassword.requestFocus();
+                return;
+            }
+
+            if (newPassword.isEmpty()) {
+                editTextNewPassword.setError("請輸入新密碼");
+                editTextNewPassword.requestFocus();
+                return;
+            }
+
+            if (newPassword.length() < 6) {
+                editTextNewPassword.setError("新密碼長度至少需要 6 個字符");
+                editTextNewPassword.requestFocus();
+                return;
+            }
+
+            if (confirmNewPassword.isEmpty()) {
+                editTextConfirmNewPassword.setError("請再次輸入新密碼");
+                editTextConfirmNewPassword.requestFocus();
+                return;
+            }
+
+            if (!newPassword.equals(confirmNewPassword)) {
+                editTextConfirmNewPassword.setError("兩次輸入的密碼不一致");
+                editTextConfirmNewPassword.requestFocus();
+                return;
+            }
+
+            // 驗證當前密碼
+            String username = sharedPreferences.getString("loggedInUser", null);
+            if (username == null || !dbHelper.checkUser(username, currentPassword)) {
+                editTextCurrentPassword.setError("當前密碼不正確");
+                editTextCurrentPassword.requestFocus();
+                return;
+            }
+
+            // 更新密碼
+            updatePassword(userId, newPassword, dialog);
+        });
+
+        dialog.show();
+    }
+
+    private void updatePassword(String userId, String newPassword, AlertDialog dialog) {
+        String originalPassword = dbHelper.getCurrentPassword(userId);
+        boolean success = dbHelper.updatePassword(userId, newPassword);
+        if (success) {
+            Toast.makeText(this, "密碼已更新", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+
+            new Thread(() -> {
+                try {
+                    dbHelper.uploadUnsyncedUsers(userId);
+                    runOnUiThread(() -> Toast.makeText(this, "密碼同步成功", Toast.LENGTH_SHORT).show());
+                } catch (Exception e) {
+                    Log.e(TAG, "Password sync failed: " + e.getMessage());
+                    dbHelper.updatePassword(userId, originalPassword); // 回滾
+                    runOnUiThread(() -> Toast.makeText(this, "密碼同步失敗，已回滾: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                }
+            }).start();
+        } else {
+            Toast.makeText(this, "更新密碼失敗", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -291,7 +385,7 @@ public class UserProfileActivity extends AppCompatActivity {
                 try {
                     dbHelper.clearUnsyncedUsersExcept(userId);
                     dbHelper.logUnsyncedUsers();
-                    dbHelper.uploadUnsyncedUsers(userId); // 優先同步指定 userId
+                    dbHelper.uploadUnsyncedUsers(userId);
                     runOnUiThread(() -> Toast.makeText(this, "用戶數據同步成功", Toast.LENGTH_SHORT).show());
                 } catch (Exception e) {
                     Log.e(TAG, "Sync failed: " + e.getMessage());
@@ -305,7 +399,7 @@ public class UserProfileActivity extends AppCompatActivity {
     }
 
     public void logAllUsers() {
-        SQLiteDatabase db = dbHelper.getRegisterDatabase(); // 使用 dbHelper 獲取資料庫
+        SQLiteDatabase db = dbHelper.getRegisterDatabase();
         Cursor cursor = db.query(TABLE_NAME, null, null, null, null, null, null);
         while (cursor.moveToNext()) {
             String id = cursor.getString(cursor.getColumnIndexOrThrow(COL_ID));
@@ -316,8 +410,6 @@ public class UserProfileActivity extends AppCompatActivity {
         }
         cursor.close();
     }
-
-    // 移除 clearUnsyncedUsersExcept，因為它應在 RegisterDatabaseHelper 中定義
 
     private void logout() {
         SharedPreferences.Editor editor = sharedPreferences.edit();
