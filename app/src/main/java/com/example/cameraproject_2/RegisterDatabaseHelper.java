@@ -49,7 +49,7 @@ import okhttp3.Response;
 public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "RegisterDatabaseHelper";
     public static final String REGISTER_DB_NAME = "register.db";
-    private static final int DATABASE_VERSION = 6;
+    private static final int DATABASE_VERSION = 7;
 
     public static final String TABLE_NAME = "Users";
     public static final String COL_ID = "id";
@@ -73,6 +73,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_MESSAGE = "message";
     public static final String COL_TIMESTAMP = "timestamp";
     public static final String COL_IS_SYNCED_MSG = "is_synced";
+    public static final String COL_PROFILE_IMAGE_URL = "profile_image_url"; // 新增欄位
 
     private final Context context;
     private SQLiteDatabase registerDatabase;
@@ -82,7 +83,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private static final String KEY_LAST_SYNC_TIME = "last_sync_time";
 
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
-    private static String SERVER_URL = "http://54.252.173.166/android_studio";
+    private static String SERVER_URL = "http://13.239.232.58/android_studio";
 
 
     /*
@@ -98,7 +99,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public RegisterDatabaseHelper(Context context) {
         super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
         this.context = context;
-        SERVER_URL = "http://54.252.173.166/android_studio"; // 強制設置
+        SERVER_URL = "http://13.239.232.58/android_studio"; // 強制設置
         loadServerUrl(); // 載入後確認
         checkDatabaseIntegrity();
         Log.d(TAG, "初始化 SERVER_URL: " + SERVER_URL);
@@ -173,7 +174,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
      */
     private void loadServerUrl() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String defaultUrl = "http://54.252.173.166/android_studio";
+        String defaultUrl = "http://13.239.232.58/android_studio";
         SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
         Log.d(TAG, "載入的 SERVER_URL: " + SERVER_URL);
         // 清除舊值（僅在調試時使用）
@@ -202,7 +203,8 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 COL_PASSWORD + " TEXT NOT NULL, " +
                 COL_LAST_MODIFIED + " INTEGER, " +
                 COL_IS_SYNCED + " INTEGER DEFAULT 0, " +
-                COL_SYNC_ACTION + " TEXT)";
+                COL_SYNC_ACTION + " TEXT, " +
+                COL_PROFILE_IMAGE_URL + " TEXT)"; // 新增 profile_image_url
         db.execSQL(createTable);
         Log.d(TAG, "Database created with table: " + TABLE_NAME);
 
@@ -230,6 +232,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        // 現有升級邏輯
         if (oldVersion < 2) {
             try {
                 db.execSQL("ALTER TABLE " + TABLE_NAME + " ADD COLUMN " + COL_EMAIL + " TEXT");
@@ -261,7 +264,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
             db.execSQL("DROP TABLE " + TABLE_NAME);
             db.execSQL("ALTER TABLE " + tempTableName + " RENAME TO " + TABLE_NAME);
-
             Log.d(TAG, "Upgraded last_modified to BIGINT");
         }
         if (oldVersion < 4) {
@@ -294,7 +296,56 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             db.execSQL(createMessagesTable);
             Log.d(TAG, "Added messages table during upgrade to version 6");
         }
+        if (oldVersion < 7) {
+            try {
+                db.execSQL("ALTER TABLE " + TABLE_NAME + " ADD COLUMN " + COL_PROFILE_IMAGE_URL + " TEXT");
+                Log.d(TAG, "Added profile_image_url column to Users table during upgrade");
+            } catch (SQLiteException e) {
+                Log.e(TAG, "Error adding profile_image_url column during upgrade: " + e.getMessage());
+            }
+        }
     }
+
+    // 新增方法：獲取用戶頭像 URL
+    public String getProfileImageUrl(String userId) {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_NAME, new String[]{COL_PROFILE_IMAGE_URL},
+                COL_ID + " = ?", new String[]{userId}, null, null, null);
+        String imageUrl = null;
+        if (cursor.moveToFirst()) {
+            imageUrl = cursor.getString(cursor.getColumnIndexOrThrow(COL_PROFILE_IMAGE_URL));
+        }
+        cursor.close();
+        return imageUrl;
+    }
+
+    // 新增方法：更新用戶頭像 URL
+    public void updateProfileImageUrl(String userId, String imageUrl) {
+        SQLiteDatabase db = getRegisterDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_PROFILE_IMAGE_URL, imageUrl);
+        values.put(COL_LAST_MODIFIED, System.currentTimeMillis());
+        values.put(COL_IS_SYNCED, 0);
+        values.put(COL_SYNC_ACTION, "update");
+        int rowsAffected = db.update(TABLE_NAME, values, COL_ID + " = ?", new String[]{userId});
+        if (rowsAffected > 0) {
+            Log.d(TAG, "Updated profile_image_url for userId: " + userId);
+            // 觸發同步
+            executorService.execute(() -> {
+                try {
+                    uploadUnsyncedUsers();
+                    Log.d(TAG, "Database synced after updating profile_image_url");
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to sync database after updating profile_image_url: " + e.getMessage());
+                    showToast("Sync failed: " + e.getMessage());
+                }
+            });
+        } else {
+            Log.e(TAG, "Failed to update profile_image_url for userId: " + userId);
+        }
+    }
+
+
 
     public SQLiteDatabase getRegisterDatabase() {
         if (registerDatabase == null || !registerDatabase.isOpen()) {
@@ -773,7 +824,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
                 .build();
 
-        String fullUrl = SERVER_URL + "/fetch_users.php";
+        String fullUrl = SERVER_URL + "/fetch_user.php"; // 修正為您提供的 fetch_user.php
         Log.d(TAG, "Fetching users from: " + fullUrl);
 
         Request request = new Request.Builder()
@@ -803,6 +854,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                         long lastModified = user.getLong(COL_LAST_MODIFIED);
                         int isSynced = user.getInt(COL_IS_SYNCED);
                         String syncAction = user.isNull(COL_SYNC_ACTION) ? null : user.getString(COL_SYNC_ACTION);
+                        String profileImageUrl = user.isNull(COL_PROFILE_IMAGE_URL) ? null : user.getString(COL_PROFILE_IMAGE_URL);
 
                         ContentValues values = new ContentValues();
                         values.put(COL_ID, id);
@@ -812,6 +864,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                         values.put(COL_LAST_MODIFIED, lastModified);
                         values.put(COL_IS_SYNCED, isSynced);
                         values.put(COL_SYNC_ACTION, syncAction);
+                        values.put(COL_PROFILE_IMAGE_URL, profileImageUrl);
 
                         db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE);
                         Log.d(TAG, "Merged user with ID: " + id + " (overwritten if duplicate)");
@@ -845,6 +898,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 long lastModified = cursor.getLong(cursor.getColumnIndexOrThrow(COL_LAST_MODIFIED));
                 int isSynced = cursor.getInt(cursor.getColumnIndexOrThrow(COL_IS_SYNCED));
                 String syncAction = cursor.getString(cursor.getColumnIndexOrThrow(COL_SYNC_ACTION));
+                String profileImageUrl = cursor.getString(cursor.getColumnIndexOrThrow(COL_PROFILE_IMAGE_URL));
 
                 JSONObject jsonBody = new JSONObject();
                 jsonBody.put(COL_ID, id);
@@ -854,6 +908,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 jsonBody.put(COL_LAST_MODIFIED, lastModified);
                 jsonBody.put(COL_IS_SYNCED, isSynced);
                 jsonBody.put(COL_SYNC_ACTION, syncAction);
+                jsonBody.put(COL_PROFILE_IMAGE_URL, profileImageUrl != null ? profileImageUrl : JSONObject.NULL);
 
                 RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
                 Request request = new Request.Builder()
@@ -862,11 +917,14 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                         .build();
 
                 try (Response response = client.newCall(request).execute()) {
+                    String responseData = response.body().string();
+                    Log.d(TAG, "Server response for user ID " + id + ": " + responseData);
                     if (response.isSuccessful()) {
-                        String responseData = response.body().string();
                         JSONObject jsonResponse = new JSONObject(responseData);
                         if (jsonResponse.getBoolean("success")) {
-                            updateSyncStatus(id, 1);
+                            ContentValues values = new ContentValues();
+                            values.put(COL_IS_SYNCED, 1);
+                            db.update(TABLE_NAME, values, COL_ID + " = ?", new String[]{id});
                             Log.d(TAG, "Uploaded unsynced user with ID: " + id);
                         } else {
                             Log.e(TAG, "Server rejected user with ID: " + id + ", message: " + jsonResponse.getString("message"));

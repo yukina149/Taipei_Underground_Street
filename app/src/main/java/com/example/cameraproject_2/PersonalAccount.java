@@ -43,6 +43,7 @@ public class PersonalAccount extends AppCompatActivity {
         if (!sharedPreferences.getBoolean("isLoggedIn", false)) {
             editor.putString("loggedInUser", "訪客");
             editor.putString("userId", "訪客");
+            editor.putString("profileImageUrl", null); // 初始化頭像 URL
             editor.apply();
         }
 
@@ -73,11 +74,13 @@ public class PersonalAccount extends AppCompatActivity {
                 Log.d("RegisterDatabaseHelper", "Login attempt for " + username + ": Success");
 
                 String userId = dbHelper.getUserId(username, password);
+                String profileImageUrl = dbHelper.getProfileImageUrl(userId); // 獲取頭像 URL
 
                 SharedPreferences.Editor loginEditor = sharedPreferences.edit();
                 loginEditor.putString("loggedInUser", username);
                 loginEditor.putString("userId", userId != null ? userId : "未知 ID");
                 loginEditor.putBoolean("isLoggedIn", true);
+                loginEditor.putString("profileImageUrl", profileImageUrl); // 儲存頭像 URL
                 loginEditor.apply();
 
                 if (syncSuccess) {
@@ -87,10 +90,11 @@ public class PersonalAccount extends AppCompatActivity {
                 }
 
                 Set<String> groupNames = sharedPreferences.getStringSet("group_names", new HashSet<>());
-                Intent intent = new Intent(PersonalAccount.this, Chatroom.class);
+                Intent intent = new Intent(PersonalAccount.this, UserProfileActivity.class); // 修正為直接跳轉到 UserProfileActivity
                 intent.putExtra("username", username);
                 intent.putExtra("userId", userId != null ? userId : "未知 ID");
-                intent.putStringArrayListExtra("groupNames", new ArrayList<>(new ArrayList<>(groupNames)));
+                intent.putExtra("profileImageUrl", profileImageUrl); // 傳遞頭像 URL
+                intent.putStringArrayListExtra("groupNames", new ArrayList<>(groupNames));
                 if (!groupNames.isEmpty()) {
                     String firstGroup = groupNames.iterator().next();
                     String membersString = sharedPreferences.getString(firstGroup + "_members", "");
@@ -98,14 +102,14 @@ public class PersonalAccount extends AppCompatActivity {
                     if (!membersString.isEmpty()) {
                         String[] membersArray = membersString.split(",");
                         for (String member : membersArray) {
-                            membersList.add(member);
+                            membersList.add(member.trim());
                         }
                     }
                     intent.putExtra("groupName", firstGroup);
                     intent.putStringArrayListExtra("members", new ArrayList<>(membersList));
                 }
-
                 startActivity(intent);
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left); // 添加動畫
                 finish();
             } else {
                 Toast.makeText(PersonalAccount.this, "Login failed", Toast.LENGTH_SHORT).show();
@@ -116,12 +120,12 @@ public class PersonalAccount extends AppCompatActivity {
         buttonRegister.setOnClickListener(v -> {
             Intent intent = new Intent(PersonalAccount.this, CreatAccount.class);
             startActivity(intent);
+            overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
         });
     }
 
     private void checkGroupInvitations(String username, String password) {
-        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
-        String userId = getUserId(username, password);
+        String userId = dbHelper.getUserId(username, password);
         Log.d("PersonalAccount", "Checking invitations for userId: " + userId);
         if (userId != null) {
             List<Invitation> invitations = dbHelper.getPendingInvitations(userId);
@@ -143,9 +147,7 @@ public class PersonalAccount extends AppCompatActivity {
                                 dbHelper.updateInvitationStatus(invitation.getInvitationId(), "rejected");
                                 dialog.dismiss();
                             });
-                            builder.setOnDismissListener(dialog -> {
-                                invitationDialogs.remove(dialog);
-                            });
+                            builder.setOnDismissListener(dialog -> invitationDialogs.remove(dialog));
                             AlertDialog dialog = builder.create();
                             invitationDialogs.add(dialog);
                             dialog.show();
@@ -157,43 +159,12 @@ public class PersonalAccount extends AppCompatActivity {
             }
         }
     }
-    private void checkInvitations() {
-        String userId = sharedPreferences.getString("userId", null);
-        if (userId != null) {
-            Log.d(TAG, "Checking invitations for userId: " + userId);
-            List<Invitation> invitations = dbHelper.getPendingInvitations(userId);
-            Log.d(TAG, "Found " + invitations.size() + " invitations");
-            if (!invitations.isEmpty()) {
-                for (Invitation invitation : invitations) {
-                    Log.d(TAG, "Displaying invitation: id=" + invitation.getInvitationId() + ", group=" + invitation.getGroupName());
-                    // 更新 SharedPreferences 中的群組列表
-                    Set<String> groupNames = new HashSet<>(sharedPreferences.getStringSet("groupNames", new HashSet<>()));
-                    groupNames.add(invitation.getGroupName());
-                    sharedPreferences.edit().putStringSet("groupNames", groupNames).apply();
-                    // 顯示邀請對話框或其他 UI 更新
-                    showInvitationDialog(invitation);
-                }
-            }
-        }
-    }
 
-    private void showInvitationDialog(Invitation invitation) {
-        new AlertDialog.Builder(this)
-                .setTitle("新邀請")
-                .setMessage("您已被邀請加入群組: " + invitation.getGroupName())
-                .setPositiveButton("接受", (dialog, which) -> {
-                    acceptInvitation(invitation);
-                    dialog.dismiss();
-                })
-                .setNegativeButton("拒絕", (dialog, which) -> dialog.dismiss())
-                .show();
-    }
-
-    private void acceptInvitation(Invitation invitation) {
-        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
-        dbHelper.updateInvitationStatus(invitation.getInvitationId(), "accepted");
-        addGroupToSharedPreferences(invitation.getGroupName());
-        Log.d(TAG, "Accepted invitation for group: " + invitation.getGroupName());
+    private void addGroupToSharedPreferences(String groupName) {
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        Set<String> groups = new HashSet<>(prefs.getStringSet("group_names", new HashSet<>()));
+        groups.add(groupName);
+        prefs.edit().putStringSet("group_names", groups).apply();
     }
 
     @Override
@@ -216,16 +187,5 @@ public class PersonalAccount extends AppCompatActivity {
         }
         invitationDialogs.clear();
         super.onDestroy();
-    }
-
-    private void addGroupToSharedPreferences(String groupName) {
-        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-        Set<String> groups = new HashSet<>(prefs.getStringSet("group_names", new HashSet<>()));
-        groups.add(groupName);
-        prefs.edit().putStringSet("group_names", groups).apply();
-    }
-
-    private String getUserId(String username, String password) {
-        return dbHelper.getUserId(username, password);
     }
 }

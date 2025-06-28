@@ -67,7 +67,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private static final int REQUEST_CAMERA_PERMISSION_CODE = 1;
     private static final int REQUEST_NOTIFICATION_PERMISSION_CODE = 1002;
-    private static final String INVITATION_CHECK_URL = "http://52.65.244.14/android_studio/fetch_invitations.php";
+    private static final String INVITATION_CHECK_URL = "http://13.239.232.58/android_studio/fetch_invitations.php";
     private static final String USER_ID_KEY = "userId";
     private static final String LOGGED_IN_USER_KEY = "loggedInUser";
     private static final long CHECK_INTERVAL = 30000;
@@ -94,8 +94,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private BottomNavigationView bottomNavigationView;
     private Spinner imageSourceSpinner;
     private Button buttonUpload;
-
-
     private ActivityResultLauncher<Intent> orbActivityLauncher;
 
     @Override
@@ -143,14 +141,21 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
                 Intent intent = new Intent(MainActivity.this, isLoggedIn ? Chatroom.class : PersonalAccount.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             } else if (id == R.id.nav_member) {
-                Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
+                boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
+                Intent intent = new Intent(MainActivity.this, isLoggedIn ? UserProfileActivity.class : PersonalAccount.class);
+                intent.putExtra("isLoggedIn", isLoggedIn);
+                intent.putExtra("userId", sharedPreferences.getString("userId", "訪客"));
+                intent.putExtra("loggedInUser", sharedPreferences.getString("loggedInUser", "訪客"));
                 startActivity(intent);
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             } else if (id == R.id.nav_info) {
                 Toast.makeText(this, R.string.taipei_info, Toast.LENGTH_SHORT).show();
             } else if (id == R.id.nav_settings) {
                 Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             }
             return true;
         });
@@ -275,6 +280,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         }
     }
 
+    // 保留此方法，供處理群組邀請接受後的跳轉，可能由廣播或其他事件觸發
     public void onInvitationAccepted(String invitationId) {
         registerDbHelper.updateInvitationStatus(invitationId, "accepted");
         registerDbHelper.syncInvitations(this, new RegisterDatabaseHelper.SyncCallback() {
@@ -285,6 +291,22 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                         String groupName = getGroupNameFromInvitation(invitationId);
                         if (groupName != null) {
                             SharedPreferences sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+                            boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
+                            if (isLoggedIn) {
+                                // 已登入，跳轉到 UserProfileActivity
+                                Intent intent = new Intent(MainActivity.this, UserProfileActivity.class);
+                                intent.putExtra("isLoggedIn", true);
+                                intent.putExtra("loggedInUser", sharedPreferences.getString("loggedInUser", "未知用戶"));
+                                intent.putExtra("userId", sharedPreferences.getString("userId", "未知 ID"));
+                                startActivity(intent);
+                                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
+                            } else {
+                                // 未登入，跳轉到 PersonalAccount
+                                Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
+                                startActivity(intent);
+                                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
+                            }
+
                             String membersString = sharedPreferences.getString(groupName + "_members", "");
                             List<String> members = new ArrayList<>();
                             if (!membersString.isEmpty()) {
@@ -293,10 +315,11 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                                     members.add(member.trim());
                                 }
                             }
-                            Intent intent = new Intent(MainActivity.this, Chatroom.class);
-                            intent.putExtra("groupName", groupName);
-                            intent.putStringArrayListExtra("members", new ArrayList<>(members));
-                            startActivity(intent);
+                            Intent chatIntent = new Intent(MainActivity.this, Chatroom.class);
+                            chatIntent.putExtra("groupName", groupName);
+                            chatIntent.putStringArrayListExtra("members", new ArrayList<>(members));
+                            startActivity(chatIntent);
+                            overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
                         } else {
                             Log.e("MainActivity", "無法獲取邀請 ID 的群組名稱: " + invitationId);
                             Toast.makeText(MainActivity.this, "無法找到群組", Toast.LENGTH_SHORT).show();
@@ -345,13 +368,16 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
             intent.putExtra("userId", sharedPreferences.getString("userId", "訪客"));
             intent.putExtra("loggedInUser", sharedPreferences.getString("loggedInUser", "訪客"));
             startActivity(intent);
+            overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
         } else if (id == R.id.Chat_room) {
             boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
             Intent intent = new Intent(MainActivity.this, isLoggedIn ? Chatroom.class : PersonalAccount.class);
             startActivity(intent);
+            overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
         } else if (id == R.id.Create_Group) {
             Intent intent = new Intent(MainActivity.this, CreateGroupActivity.class);
             startActivity(intent);
+            overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
         } else if (id == R.id.nav_logout) {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.account_logout_confirm)
@@ -365,6 +391,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                         Toast.makeText(this, R.string.account_logout_success, Toast.LENGTH_SHORT).show();
                         Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
                         startActivity(intent);
+                        overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
                     })
                     .setNegativeButton(android.R.string.cancel, null)
                     .show();
@@ -384,7 +411,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 intent.putExtra("groupName", groupName);
                 intent.putStringArrayListExtra("members", new ArrayList<>(members));
                 startActivity(intent);
-                Log.d("MainActivity", "跳轉到 Chatroom，群組: " + groupName);
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             } else {
                 Log.w("MainActivity", "群組 " + groupName + " 不在 groupNames 中");
             }
@@ -504,7 +531,8 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 .setTitle(R.string.group_invitation_title)
                 .setMessage(getString(R.string.group_invitation_message, groupName))
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    registerDbHelper.updateInvitationStatus(invitationId, "accepted");
+                    // 調用 onInvitationAccepted 處理接受邀請邏輯
+                    onInvitationAccepted(invitationId);
                     Toast.makeText(this, getString(R.string.accept_invitation_success, groupName), Toast.LENGTH_SHORT).show();
                     dialog.dismiss();
                 })
