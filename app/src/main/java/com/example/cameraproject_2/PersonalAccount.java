@@ -1,10 +1,11 @@
 package com.example.cameraproject_2;
 
-import static org.opencv.android.NativeCameraView.TAG;
-
+import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
@@ -15,6 +16,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PersonalAccount extends AppCompatActivity {
 
@@ -25,11 +29,18 @@ public class PersonalAccount extends AppCompatActivity {
     private RegisterDatabaseHelper dbHelper;
     private SharedPreferences sharedPreferences;
     private List<AlertDialog> invitationDialogs = new ArrayList<>();
+    private ProgressDialog progressDialog;
+    private ExecutorService executorService;
+    private Handler mainHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_personal_account);
+
+        // 初始化執行緒池和主執行緒 Handler
+        executorService = Executors.newSingleThreadExecutor();
+        mainHandler = new Handler(Looper.getMainLooper());
 
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
         dbHelper = new RegisterDatabaseHelper(this);
@@ -43,7 +54,7 @@ public class PersonalAccount extends AppCompatActivity {
         if (!sharedPreferences.getBoolean("isLoggedIn", false)) {
             editor.putString("loggedInUser", "訪客");
             editor.putString("userId", "訪客");
-            editor.putString("profileImageUrl", null); // 初始化頭像 URL
+            editor.putString("profileImageUrl", null);
             editor.apply();
         }
 
@@ -63,58 +74,70 @@ public class PersonalAccount extends AppCompatActivity {
                 return;
             }
 
-            boolean syncSuccess = dbHelper.syncDatabase();
-            if (!syncSuccess) {
-                Log.w("PersonalAccount", "Database sync failed, proceeding with login");
-                Toast.makeText(PersonalAccount.this, "資料庫同步失敗，但仍可繼續登入", Toast.LENGTH_LONG).show();
-            }
+            // 顯示載入對話框
+            progressDialog = new ProgressDialog(PersonalAccount.this);
+            progressDialog.setMessage("正在登入...");
+            progressDialog.setCancelable(false);
+            progressDialog.show();
 
-            if (dbHelper.checkUser(username, password)) {
-                Toast.makeText(PersonalAccount.this, "Login successful", Toast.LENGTH_SHORT).show();
-                Log.d("RegisterDatabaseHelper", "Login attempt for " + username + ": Success");
+            // 在背景執行緒中執行登錄
+            executorService.execute(() -> {
+                // 優先檢查本地數據庫中的用戶憑證
+                boolean loginSuccess = dbHelper.checkUser(username, password);
 
-                String userId = dbHelper.getUserId(username, password);
-                String profileImageUrl = dbHelper.getProfileImageUrl(userId); // 獲取頭像 URL
+                // 在主執行緒中更新 UI
+                mainHandler.post(() -> {
+                    progressDialog.dismiss();
 
-                SharedPreferences.Editor loginEditor = sharedPreferences.edit();
-                loginEditor.putString("loggedInUser", username);
-                loginEditor.putString("userId", userId != null ? userId : "未知 ID");
-                loginEditor.putBoolean("isLoggedIn", true);
-                loginEditor.putString("profileImageUrl", profileImageUrl); // 儲存頭像 URL
-                loginEditor.apply();
+                    if (loginSuccess) {
+                        Toast.makeText(PersonalAccount.this, "登入成功", Toast.LENGTH_SHORT).show();
+                        Log.d("PersonalAccount", "Login attempt for " + username + ": Success");
 
-                if (syncSuccess) {
-                    checkGroupInvitations(username, password);
-                } else {
-                    Log.w("PersonalAccount", "Sync failed, skipping invitation check");
-                }
+                        String userId = dbHelper.getUserId(username, password);
+                        String profileImageUrl = dbHelper.getProfileImageUrl(userId);
 
-                Set<String> groupNames = sharedPreferences.getStringSet("group_names", new HashSet<>());
-                Intent intent = new Intent(PersonalAccount.this, UserProfileActivity.class); // 修正為直接跳轉到 UserProfileActivity
-                intent.putExtra("username", username);
-                intent.putExtra("userId", userId != null ? userId : "未知 ID");
-                intent.putExtra("profileImageUrl", profileImageUrl); // 傳遞頭像 URL
-                intent.putStringArrayListExtra("groupNames", new ArrayList<>(groupNames));
-                if (!groupNames.isEmpty()) {
-                    String firstGroup = groupNames.iterator().next();
-                    String membersString = sharedPreferences.getString(firstGroup + "_members", "");
-                    List<String> membersList = new ArrayList<>();
-                    if (!membersString.isEmpty()) {
-                        String[] membersArray = membersString.split(",");
-                        for (String member : membersArray) {
-                            membersList.add(member.trim());
+                        SharedPreferences.Editor loginEditor = sharedPreferences.edit();
+                        loginEditor.putString("loggedInUser", username);
+                        loginEditor.putString("userId", userId != null ? userId : "未知 ID");
+                        loginEditor.putBoolean("isLoggedIn", true);
+                        loginEditor.putString("profileImageUrl", profileImageUrl);
+                        loginEditor.apply();
+
+                        // 檢查群組邀請（本地數據）
+                        checkGroupInvitations(username, password);
+
+                        // 啟動後台同步，獨立於登錄流程
+                        startBackgroundSync();
+
+                        // 跳轉到 UserProfileActivity
+                        Set<String> groupNames = sharedPreferences.getStringSet("group_names", new HashSet<>());
+                        Intent intent = new Intent(PersonalAccount.this, UserProfileActivity.class);
+                        intent.putExtra("username", username);
+                        intent.putExtra("userId", userId != null ? userId : "未知 ID");
+                        intent.putExtra("profileImageUrl", profileImageUrl);
+                        intent.putStringArrayListExtra("groupNames", new ArrayList<>(groupNames));
+                        if (!groupNames.isEmpty()) {
+                            String firstGroup = groupNames.iterator().next();
+                            String membersString = sharedPreferences.getString(firstGroup + "_members", "");
+                            List<String> membersList = new ArrayList<>();
+                            if (!membersString.isEmpty()) {
+                                String[] membersArray = membersString.split(",");
+                                for (String member : membersArray) {
+                                    membersList.add(member.trim());
+                                }
+                            }
+                            intent.putExtra("groupName", firstGroup);
+                            intent.putStringArrayListExtra("members", new ArrayList<>(membersList));
                         }
+                        startActivity(intent);
+                        overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
+                        finish();
+                    } else {
+                        Toast.makeText(PersonalAccount.this, "登入失敗，請檢查帳號或密碼", Toast.LENGTH_SHORT).show();
+                        Log.d("PersonalAccount", "Login attempt for " + username + ": Failed");
                     }
-                    intent.putExtra("groupName", firstGroup);
-                    intent.putStringArrayListExtra("members", new ArrayList<>(membersList));
-                }
-                startActivity(intent);
-                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left); // 添加動畫
-                finish();
-            } else {
-                Toast.makeText(PersonalAccount.this, "Login failed", Toast.LENGTH_SHORT).show();
-                Log.d("RegisterDatabaseHelper", "Login attempt for " + username + ": Failed");
-            }
+                });
+            });
         });
 
         buttonRegister.setOnClickListener(v -> {
@@ -124,6 +147,34 @@ public class PersonalAccount extends AppCompatActivity {
         });
     }
 
+    private void startBackgroundSync() {
+        // 在背景執行緒中執行同步
+        executorService.execute(() -> {
+            // 使用 SyncCallback 處理同步結果
+            AtomicBoolean syncSuccess = new AtomicBoolean(false); // 使用 AtomicBoolean 跨執行緒共享狀態
+            dbHelper.syncDatabase(new RegisterDatabaseHelper.SyncCallback() {
+                @Override
+                public void onSyncComplete(boolean success) {
+                    syncSuccess.set(success);
+                }
+            });
+
+            mainHandler.post(() -> {
+                if (!syncSuccess.get()) {
+                    Log.w("PersonalAccount", "Background database sync failed");
+                    Toast.makeText(PersonalAccount.this, "資料庫同步失敗，將在下次嘗試", Toast.LENGTH_LONG).show();
+                } else {
+                    Log.d("PersonalAccount", "Background database sync completed");
+                    // 同步完成後重新檢查邀請
+                    String username = sharedPreferences.getString("loggedInUser", null);
+                    String userId = dbHelper.getUserIdFromUsername(username);
+                    if (userId != null) {
+                        checkGroupInvitations(username, null);
+                    }
+                }
+            });
+        });
+    }
     private void checkGroupInvitations(String username, String password) {
         String userId = dbHelper.getUserId(username, password);
         Log.d("PersonalAccount", "Checking invitations for userId: " + userId);
@@ -186,6 +237,7 @@ public class PersonalAccount extends AppCompatActivity {
             }
         }
         invitationDialogs.clear();
+        executorService.shutdown();
         super.onDestroy();
     }
 }

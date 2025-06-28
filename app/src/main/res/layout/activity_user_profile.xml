@@ -45,6 +45,13 @@
         android:layout_marginTop="16dp" />
 
     <Button
+        android:id="@+id/button_change_password"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="更改密碼"
+        android:layout_marginTop="16dp" />
+
+    <Button
         android:id="@+id/button_logout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

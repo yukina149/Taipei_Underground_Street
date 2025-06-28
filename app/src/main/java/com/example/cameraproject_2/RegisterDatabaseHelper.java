@@ -692,15 +692,29 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public void syncInvitations(Context context, SyncCallback callback) {
         executorService.execute(() -> {
             try {
-                uploadUnsyncedInvitations();
-
-                String username = getUsernameFromUserId("1");
-                if (username == null) {
-                    Log.e(TAG, "Cannot retrieve username for userId: 1, skipping sync");
+                // 檢查是否正在同步，避免重複執行
+                if (isSyncing) {
+                    Log.d(TAG, "Sync already in progress, skipping");
                     if (callback != null) callback.onSyncComplete(false);
                     return;
                 }
-                String url = SERVER_URL + "/fetch_invitations.php?invited_user=" + username;
+                isSyncing = true;
+                uploadUnsyncedInvitations();
+
+                String userId = context.getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
+                        .getString("userId", null);
+                if (userId == null) {
+                    Log.e(TAG, "No userId found, skipping invitation sync");
+                    if (callback != null) callback.onSyncComplete(false);
+                    return;
+                }
+                String username = getUsernameFromUserId(userId);
+                if (username == null) {
+                    Log.e(TAG, "Cannot retrieve username for userId: " + userId + ", skipping sync");
+                    if (callback != null) callback.onSyncComplete(false);
+                    return;
+                }
+                String url = SERVER_URL + "/fetch_invitations.php?invited_user=" + Uri.encode(username);
                 String response = fetchInvitationsFromServer(url);
                 JSONObject jsonResponse = new JSONObject(response);
                 if (jsonResponse.getBoolean("success")) {
@@ -752,9 +766,13 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             } catch (Exception e) {
                 Log.e(TAG, "Error syncing invitations: " + e.getMessage());
                 if (callback != null) callback.onSyncComplete(false);
+            } finally {
+                isSyncing = false;
             }
         });
     }
+
+    private boolean isSyncing = false; // 新增同步狀態標誌
 
     public static class RegistrationResult {
         public boolean success;
@@ -914,42 +932,38 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         return activeNetwork != null && activeNetwork.isConnected();
     }
 
-    public boolean syncDatabase() {
+    public void syncDatabase(RegisterDatabaseHelper.SyncCallback callback) {
         if (!isNetworkAvailable()) {
             Log.d(TAG, "No network available, skipping sync");
-            showToast("No network available, sync skipped");
-            return false;
+            showToast("無網絡連接，跳過同步");
+            if (callback != null) callback.onSyncComplete(false);
+            return;
         }
 
-        CountDownLatch latch = new CountDownLatch(1);
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         long lastSyncTime = prefs.getLong(KEY_LAST_SYNC_TIME, 0);
         long currentTime = System.currentTimeMillis();
 
-        final boolean[] success = {false};
         executorService.execute(() -> {
+            boolean success = false;
             try {
                 syncDatabaseInternal(lastSyncTime);
                 SharedPreferences.Editor editor = prefs.edit();
                 editor.putLong(KEY_LAST_SYNC_TIME, currentTime);
                 editor.apply();
-                success[0] = true;
+                success = true;
             } catch (Exception e) {
                 Log.e(TAG, "Sync failed: " + e.getMessage());
                 new Handler(Looper.getMainLooper()).post(() ->
-                        showToast("Sync failed: " + e.getMessage()));
+                        showToast("同步失敗: " + e.getMessage()));
             } finally {
-                latch.countDown();
+                if (callback != null) {
+                    boolean finalSuccess = success;
+                    new Handler(Looper.getMainLooper()).post(() ->
+                            callback.onSyncComplete(finalSuccess));
+                }
             }
         });
-
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Log.e(TAG, "Interrupted while waiting for sync: " + e.getMessage());
-            return false;
-        }
-        return success[0];
     }
 
     private void syncDatabaseInternal() throws IOException, JSONException {
@@ -965,7 +979,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         while (retryCount < maxRetries) {
             try {
                 Log.d(TAG, "Starting database synchronization (attempt " + (retryCount + 1) + ")...");
-                syncDatabase();
+                syncDatabase(null);
                 fetchAndMergeUsersFromServer(lastSyncTime);
                 Log.d(TAG, "Synchronization completed");
                 return;

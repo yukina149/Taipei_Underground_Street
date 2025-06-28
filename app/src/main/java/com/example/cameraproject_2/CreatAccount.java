@@ -124,7 +124,7 @@ public class CreatAccount extends AppCompatActivity {
                 Log.d("CreatAccount", "Registration failed for " + newUsername + ": Username already exists");
             }
 
-            dbHelper.syncDatabase();
+            dbHelper.syncDatabase(null);
         });
     }
 
