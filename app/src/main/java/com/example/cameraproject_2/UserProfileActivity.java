@@ -1,13 +1,21 @@
 package com.example.cameraproject_2;
 
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_ID;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_IS_SYNCED;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_SYNC_ACTION;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.COL_USERNAME;
+import static com.example.cameraproject_2.RegisterDatabaseHelper.TABLE_NAME;
 import static org.opencv.android.NativeCameraView.TAG;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -45,7 +53,10 @@ public class UserProfileActivity extends AppCompatActivity {
     private TextView textViewUserId;
     private Button buttonLogout;
     private Button buttonChangeProfile;
+    private Button buttonConfirmUsername;
     private ActivityResultLauncher<Intent> pickImageLauncher;
+    private String originalUsername; // 儲存原始用戶名
+    private String userId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +72,7 @@ public class UserProfileActivity extends AppCompatActivity {
         textViewUserId = findViewById(R.id.text_view_user_id);
         buttonLogout = findViewById(R.id.button_logout);
         buttonChangeProfile = findViewById(R.id.button_change_profile);
+        buttonConfirmUsername = findViewById(R.id.button_confirm_username);
 
         // 設置圖片選擇啟動器
         pickImageLauncher = registerForActivityResult(
@@ -69,7 +81,6 @@ public class UserProfileActivity extends AppCompatActivity {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                         Uri selectedImageUri = result.getData().getData();
                         if (selectedImageUri != null) {
-                            String userId = sharedPreferences.getString("userId", null);
                             if (userId != null && !userId.equals("訪客")) {
                                 uploadProfileImage(selectedImageUri, userId);
                             } else {
@@ -84,25 +95,24 @@ public class UserProfileActivity extends AppCompatActivity {
         Intent intent = getIntent();
         boolean isLoggedIn = intent.getBooleanExtra("isLoggedIn", sharedPreferences.getBoolean("isLoggedIn", false));
         String loggedInUser = intent.getStringExtra("username");
-        String userId = intent.getStringExtra("userId");
-        final String profileImageUrl; // 聲明為 final
+        userId = intent.getStringExtra("userId"); // 初始化 userId
         if (loggedInUser == null) loggedInUser = sharedPreferences.getString("loggedInUser", "未知用戶");
         if (userId == null) userId = sharedPreferences.getString("userId", "未知 ID");
-        if (intent.getStringExtra("profileImageUrl") != null) {
-            profileImageUrl = intent.getStringExtra("profileImageUrl");
-        } else {
-            profileImageUrl = dbHelper.getProfileImageUrl(userId); // 從資料庫獲取
-        }
-
-        Log.d(TAG, "onCreate: userId=" + userId + ", profileImageUrl=" + profileImageUrl);
 
         // 根據狀態顯示內容
         if (isLoggedIn && !userId.equals("訪客")) {
+            originalUsername = loggedInUser;
             editTextUsername.setText(loggedInUser);
             editTextUsername.setEnabled(true);
             textViewUserId.setText("帳號: " + userId);
 
             // 載入頭像
+            String profileImageUrl = intent.getStringExtra("profileImageUrl");
+            if (profileImageUrl == null) {
+                profileImageUrl = dbHelper.getProfileImageUrl(userId);
+            }
+            Log.d(TAG, "onCreate: userId=" + userId + ", profileImageUrl=" + profileImageUrl);
+
             if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
                 Picasso.get().load(profileImageUrl)
                         .error(R.drawable.user)
@@ -110,7 +120,7 @@ public class UserProfileActivity extends AppCompatActivity {
                         .into(profileImage, new com.squareup.picasso.Callback() {
                             @Override
                             public void onSuccess() {
-                                Log.d(TAG, "Profile image loaded successfully: " + profileImageUrl);
+                                //Log.d(TAG, "Profile image loaded successfully: " + profileImageUrl);
                             }
 
                             @Override
@@ -124,18 +134,43 @@ public class UserProfileActivity extends AppCompatActivity {
                 Log.d(TAG, "No profile image URL, using default");
             }
 
-            buttonChangeProfile.setOnClickListener(v -> changeProfileImage());
-            buttonLogout.setOnClickListener(v -> logout());
-            editTextUsername.setOnFocusChangeListener((v, hasFocus) -> {
-                if (!hasFocus && !editTextUsername.getText().toString().isEmpty()) {
-                    updateUsername(editTextUsername.getText().toString());
+            // 監聽 EditText 變化
+            editTextUsername.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+                @Override
+                public void afterTextChanged(Editable s) {
+                    String newUsername = s.toString().trim();
+                    buttonConfirmUsername.setVisibility(
+                            !newUsername.isEmpty() && !newUsername.equals(originalUsername)
+                                    ? View.VISIBLE
+                                    : View.GONE
+                    );
                 }
             });
+
+            buttonConfirmUsername.setOnClickListener(v -> {
+                String newUsername = editTextUsername.getText().toString().trim();
+                if (!newUsername.isEmpty()) {
+                    updateUsername(newUsername, userId);
+                    buttonConfirmUsername.setVisibility(View.GONE);
+                } else {
+                    Toast.makeText(this, "用戶名不能為空", Toast.LENGTH_SHORT).show();
+                }
+            });
+
+            buttonChangeProfile.setOnClickListener(v -> changeProfileImage());
+            buttonLogout.setOnClickListener(v -> logout());
         } else {
             editTextUsername.setText("");
             textViewUserId.setText("帳號: 未登入");
             buttonChangeProfile.setVisibility(View.GONE);
             buttonLogout.setVisibility(View.GONE);
+            buttonConfirmUsername.setVisibility(View.GONE);
             profileImage.setImageResource(R.drawable.user);
             Toast.makeText(this, "請先登入", Toast.LENGTH_SHORT).show();
             Intent personalIntent = new Intent(this, PersonalAccount.class);
@@ -144,11 +179,19 @@ public class UserProfileActivity extends AppCompatActivity {
         }
     }
 
-    private void uploadProfileImage(Uri imageUri, String userId) {
+    private void uploadProfileImage(Uri imageUri, final String userId) {
         OkHttpClient client = new OkHttpClient();
         String url = "http://13.239.232.58/android_studio/upload_profile_image.php";
 
         File file = new File(getRealPathFromURI(imageUri));
+        Log.d(TAG, "Uploading image for userId: " + userId + ", file path: " + file.getAbsolutePath() + ", file exists: " + file.exists() + ", file size: " + file.length());
+
+        if (!file.exists() || file.length() == 0) {
+            runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "無效的圖片文件", Toast.LENGTH_SHORT).show());
+            Log.e(TAG, "Invalid image file: exists=" + file.exists() + ", size=" + file.length());
+            return;
+        }
+
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("userId", userId)
@@ -164,7 +207,7 @@ public class UserProfileActivity extends AppCompatActivity {
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "上傳失敗: " + e.getMessage(), Toast.LENGTH_SHORT).show());
                 Log.e(TAG, "Upload failed: " + e.getMessage());
             }
 
@@ -173,9 +216,8 @@ public class UserProfileActivity extends AppCompatActivity {
                 String responseData = response.body().string();
                 Log.d(TAG, "Upload response: " + responseData);
 
-                // 檢查響應是否包含 JSON
                 if (!responseData.trim().startsWith("{")) {
-                    runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "Server error: Invalid response format", Toast.LENGTH_SHORT).show());
+                    runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "伺服器錯誤: 無效的回應格式", Toast.LENGTH_SHORT).show());
                     Log.e(TAG, "Invalid JSON response: " + responseData);
                     return;
                 }
@@ -184,21 +226,36 @@ public class UserProfileActivity extends AppCompatActivity {
                     JSONObject jsonResponse = new JSONObject(responseData);
                     if (jsonResponse.getBoolean("success")) {
                         String imageUrl = jsonResponse.getString("profile_image_url");
+                        Log.d(TAG, "Image uploaded, URL: " + imageUrl);
                         dbHelper.updateProfileImageUrl(userId, imageUrl);
                         SharedPreferences.Editor editor = sharedPreferences.edit();
                         editor.putString("profileImageUrl", imageUrl);
                         editor.apply();
                         runOnUiThread(() -> {
-                            Picasso.get().load(imageUrl).error(R.drawable.user).into(profileImage);
-                            Toast.makeText(UserProfileActivity.this, "Image uploaded successfully", Toast.LENGTH_SHORT).show();
+                            Picasso.get().load(imageUrl)
+                                    .error(R.drawable.user)
+                                    .placeholder(R.drawable.user)
+                                    .into(profileImage, new com.squareup.picasso.Callback() {
+                                        @Override
+                                        public void onSuccess() {
+                                            Log.d(TAG, "Profile image loaded successfully: " + imageUrl);
+                                        }
+
+                                        @Override
+                                        public void onError(Exception e) {
+                                            Log.e(TAG, "Failed to load profile image: " + e.getMessage());
+                                            profileImage.setImageResource(R.drawable.user);
+                                        }
+                                    });
+                            Toast.makeText(UserProfileActivity.this, "圖片上傳成功", Toast.LENGTH_SHORT).show();
                         });
                     } else {
-                        String message = jsonResponse.optString("message", "Unknown error");
-                        runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "Upload failed: " + message, Toast.LENGTH_SHORT).show());
+                        String message = jsonResponse.optString("message", "未知錯誤");
+                        runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "上傳失敗: " + message, Toast.LENGTH_SHORT).show());
                         Log.e(TAG, "Upload failed: " + message);
                     }
                 } catch (JSONException e) {
-                    runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "JSON error: Invalid server response", Toast.LENGTH_SHORT).show());
+                    runOnUiThread(() -> Toast.makeText(UserProfileActivity.this, "JSON 錯誤: 無效的伺服器回應", Toast.LENGTH_SHORT).show());
                     Log.e(TAG, "JSON error: " + e.getMessage() + ", response: " + responseData);
                 }
             }
@@ -220,12 +277,47 @@ public class UserProfileActivity extends AppCompatActivity {
         pickImageLauncher.launch(intent);
     }
 
-    private void updateUsername(String newUsername) {
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putString("loggedInUser", newUsername);
-        editor.apply();
-        Toast.makeText(this, "姓名已更新為: " + newUsername, Toast.LENGTH_SHORT).show();
+    private void updateUsername(String newUsername, String userId) {
+        String tempOriginalUsername = originalUsername;
+        boolean success = dbHelper.updateUsername(userId, newUsername);
+        if (success) {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("loggedInUser", newUsername);
+            editor.apply();
+            originalUsername = newUsername;
+            runOnUiThread(() -> Toast.makeText(this, "姓名已更新為: " + newUsername, Toast.LENGTH_SHORT).show());
+
+            new Thread(() -> {
+                try {
+                    dbHelper.clearUnsyncedUsersExcept(userId);
+                    dbHelper.logUnsyncedUsers();
+                    dbHelper.uploadUnsyncedUsers(userId); // 優先同步指定 userId
+                    runOnUiThread(() -> Toast.makeText(this, "用戶數據同步成功", Toast.LENGTH_SHORT).show());
+                } catch (Exception e) {
+                    Log.e(TAG, "Sync failed: " + e.getMessage());
+                    dbHelper.updateUsername(userId, tempOriginalUsername);
+                    runOnUiThread(() -> Toast.makeText(this, "同步失敗，已回滾用戶名: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                }
+            }).start();
+        } else {
+            runOnUiThread(() -> Toast.makeText(this, "更新姓名失敗", Toast.LENGTH_SHORT).show());
+        }
     }
+
+    public void logAllUsers() {
+        SQLiteDatabase db = dbHelper.getRegisterDatabase(); // 使用 dbHelper 獲取資料庫
+        Cursor cursor = db.query(TABLE_NAME, null, null, null, null, null, null);
+        while (cursor.moveToNext()) {
+            String id = cursor.getString(cursor.getColumnIndexOrThrow(COL_ID));
+            String username = cursor.getString(cursor.getColumnIndexOrThrow(COL_USERNAME));
+            String syncAction = cursor.getString(cursor.getColumnIndexOrThrow(COL_SYNC_ACTION));
+            int isSynced = cursor.getInt(cursor.getColumnIndexOrThrow(COL_IS_SYNCED));
+            Log.d(TAG, "User: id=" + id + ", username=" + username + ", syncAction=" + syncAction + ", isSynced=" + isSynced);
+        }
+        cursor.close();
+    }
+
+    // 移除 clearUnsyncedUsersExcept，因為它應在 RegisterDatabaseHelper 中定義
 
     private void logout() {
         SharedPreferences.Editor editor = sharedPreferences.edit();

@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDatabaseLockedException;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.ConnectivityManager;
@@ -40,6 +41,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -85,6 +88,11 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private static String SERVER_URL = "http://13.239.232.58/android_studio";
 
+    private SQLiteDatabase db; // 類成員變數
+    private static final Object dbLock = new Object(); // 用於同步的鎖
+
+    private Toast toast;
+
 
     /*
     public RegisterDatabaseHelper(Context context) {
@@ -102,7 +110,24 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         SERVER_URL = "http://13.239.232.58/android_studio"; // 強制設置
         loadServerUrl(); // 載入後確認
         checkDatabaseIntegrity();
+        cleanInvalidUsers(); // 清理無效數據
         Log.d(TAG, "初始化 SERVER_URL: " + SERVER_URL);
+    }
+
+    public void cleanInvalidUsers() {
+        SQLiteDatabase db = getRegisterDatabase();
+        db.beginTransaction();
+        try {
+            // 刪除 id 為空或包含空格的記錄
+            int deletedRows = db.delete(TABLE_NAME, COL_ID + " IS NULL OR " + COL_ID + " LIKE ?",
+                    new String[]{"% %"}); // % % 匹配包含空格的 id
+            Log.d(TAG, "Cleaned " + deletedRows + " invalid users from " + TABLE_NAME);
+            db.setTransactionSuccessful();
+        } catch (Exception e) {
+            Log.e(TAG, "Error cleaning invalid users: " + e.getMessage());
+        } finally {
+            db.endTransaction();
+        }
     }
 
     public void fetchInvitationsFromServer(Context context, String userId, String lastSyncTime, SyncCallback callback) {
@@ -306,6 +331,136 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
+    //更改姓名
+    public boolean updateUsername(String userId, String newUsername) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("username", newUsername);
+        values.put("is_synced", 0); // 標記為未同步
+        values.put("sync_action", "update");
+        values.put("last_modified", System.currentTimeMillis() / 1000);
+        int rowsAffected = db.update("users", values, "id = ?", new String[]{userId});
+        Log.d(TAG, "updateUsername: userId=" + userId + ", newUsername=" + newUsername + ", rowsAffected=" + rowsAffected);
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    public void uploadUnsyncedUsers(String priorityUserId) {
+        int retryCount = 0;
+        final int maxRetries = 3;
+        long backoffDelay = 2000;
+
+        while (retryCount < maxRetries) {
+            try {
+                SQLiteDatabase db = getRegisterDatabase();
+                // 優先查詢指定 userId
+                String selection = COL_IS_SYNCED + " = 0";
+                String[] selectionArgs = null;
+                if (priorityUserId != null) {
+                    selection += " AND " + COL_ID + " = ?";
+                    selectionArgs = new String[]{priorityUserId};
+                }
+                Cursor cursor = db.query(TABLE_NAME, null, selection, selectionArgs, null, null, null);
+                OkHttpClient client = new OkHttpClient.Builder()
+                        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                        .build();
+
+                db.beginTransaction();
+                try {
+                    boolean hasProcessedPriority = false;
+                    while (cursor.moveToNext()) {
+                        String id = cursor.getString(cursor.getColumnIndexOrThrow(COL_ID));
+                        String username = cursor.getString(cursor.getColumnIndexOrThrow(COL_USERNAME));
+                        String profileImageUrl = cursor.getString(cursor.getColumnIndexOrThrow(COL_PROFILE_IMAGE_URL));
+                        String syncAction = cursor.getString(cursor.getColumnIndexOrThrow(COL_SYNC_ACTION));
+
+                        Log.d(TAG, "Starting sync for userId: " + id + ", syncAction: " + syncAction);
+
+                        JSONObject jsonBody = new JSONObject();
+                        jsonBody.put(COL_ID, id);
+                        jsonBody.put(COL_USERNAME, username);
+                        jsonBody.put(COL_PROFILE_IMAGE_URL, profileImageUrl != null ? profileImageUrl : JSONObject.NULL);
+                        jsonBody.put(COL_SYNC_ACTION, syncAction != null ? syncAction : "update");
+
+                        RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
+                        Request request = new Request.Builder()
+                                .url(SERVER_URL + "/sync_users.php")
+                                .post(requestBody)
+                                .build();
+
+                        try (Response response = client.newCall(request).execute()) {
+                            String responseData = response.body().string();
+                            Log.d(TAG, "Server response for userId " + id + ": " + responseData);
+                            if (response.isSuccessful()) {
+                                JSONObject jsonResponse = new JSONObject(responseData);
+                                if (jsonResponse.getBoolean("success")) {
+                                    ContentValues values = new ContentValues();
+                                    values.put(COL_IS_SYNCED, 1);
+                                    db.update(TABLE_NAME, values, COL_ID + " = ?", new String[]{id});
+                                    Log.d(TAG, "Uploaded unsynced user with ID: " + id);
+                                    if (id.equals(priorityUserId)) {
+                                        hasProcessedPriority = true;
+                                    }
+                                } else {
+                                    Log.e(TAG, "Server rejected user with ID: " + id + ", message: " + jsonResponse.getString("message"));
+                                    if (id.equals(priorityUserId)) {
+                                        throw new IOException(jsonResponse.getString("message"));
+                                    }
+                                }
+                            } else {
+                                Log.e(TAG, "Failed to upload user with ID: " + id + ": " + response.code() + " - " + response.message());
+                                if (id.equals(priorityUserId)) {
+                                    throw new IOException("Upload failed: " + response.code() + " - " + response.message());
+                                }
+                            }
+                        }
+                    }
+                    db.setTransactionSuccessful();
+                    if (priorityUserId == null || hasProcessedPriority) {
+                        return; // 如果沒有指定優先用戶或優先用戶已處理，則退出
+                    }
+                } finally {
+                    db.endTransaction();
+                    cursor.close();
+                }
+            } catch (Exception e) {
+                retryCount++;
+                Log.e(TAG, "Upload attempt " + retryCount + " failed: " + e.getMessage());
+                if (retryCount < maxRetries) {
+                    try {
+                        Thread.sleep(backoffDelay);
+                        backoffDelay *= 2;
+                    } catch (InterruptedException ie) {
+                        Log.e(TAG, "Retry interrupted: " + ie.getMessage());
+                    }
+                } else {
+                    Log.e(TAG, "Upload failed after " + maxRetries + " attempts: " + e.getMessage());
+                    showToast("Failed to sync users: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    public void clearUnsyncedUsersExcept(String userId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete(TABLE_NAME, COL_IS_SYNCED + " = 0 AND " + COL_ID + " != ?", new String[]{userId});
+        Log.d(TAG, "Cleared unsynced users except userId: " + userId);
+    }
+
+    public void logUnsyncedUsers() {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_NAME, new String[]{COL_ID, COL_USERNAME, COL_SYNC_ACTION},
+                COL_IS_SYNCED + " = 0", null, null, null, null);
+        while (cursor.moveToNext()) {
+            String id = cursor.getString(cursor.getColumnIndexOrThrow(COL_ID));
+            String username = cursor.getString(cursor.getColumnIndexOrThrow(COL_USERNAME));
+            String syncAction = cursor.getString(cursor.getColumnIndexOrThrow(COL_SYNC_ACTION));
+            Log.d(TAG, "Unsynced user: id=" + id + ", username=" + username + ", syncAction=" + syncAction);
+        }
+        cursor.close();
+    }
+
     // 新增方法：獲取用戶頭像 URL
     public String getProfileImageUrl(String userId) {
         SQLiteDatabase db = getRegisterDatabase();
@@ -330,10 +485,10 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         int rowsAffected = db.update(TABLE_NAME, values, COL_ID + " = ?", new String[]{userId});
         if (rowsAffected > 0) {
             Log.d(TAG, "Updated profile_image_url for userId: " + userId);
-            // 觸發同步
+            // 觸發同步，傳入 userId 作為 priorityUserId
             executorService.execute(() -> {
                 try {
-                    uploadUnsyncedUsers();
+                    uploadUnsyncedUsers(userId); // 傳入 userId
                     Log.d(TAG, "Database synced after updating profile_image_url");
                 } catch (Exception e) {
                     Log.e(TAG, "Failed to sync database after updating profile_image_url: " + e.getMessage());
@@ -348,19 +503,38 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
 
     public SQLiteDatabase getRegisterDatabase() {
-        if (registerDatabase == null || !registerDatabase.isOpen()) {
-            registerDatabase = getWritableDatabase();
+        synchronized (dbLock) {
+            int retries = 3;
+            while (retries > 0) {
+                try {
+                    if (db == null || !db.isOpen()) {
+                        db = getWritableDatabase();
+                    }
+                    return db;
+                } catch (SQLiteDatabaseLockedException e) {
+                    Log.e(TAG, "Database locked, retrying... (" + retries + " attempts left)");
+                    retries--;
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException ie) {
+                        Log.e(TAG, "Interrupted during retry: " + ie.getMessage());
+                        Thread.currentThread().interrupt();
+                    }
+                } catch (SQLiteException e) {
+                    Log.e(TAG, "Database access error: " + e.getMessage());
+                    throw e;
+                }
+            }
+            throw new SQLiteDatabaseLockedException("Failed to open database after retries");
         }
-        return registerDatabase;
     }
 
     public void closeDatabase() {
-        if (registerDatabase != null && registerDatabase.isOpen()) {
-            registerDatabase.close();
-            registerDatabase = null;
-        }
-        if (!executorService.isShutdown()) {
-            executorService.shutdown();
+        synchronized (dbLock) {
+            if (db != null && db.isOpen()) {
+                db.close();
+                db = null;
+            }
         }
     }
 
@@ -791,7 +965,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         while (retryCount < maxRetries) {
             try {
                 Log.d(TAG, "Starting database synchronization (attempt " + (retryCount + 1) + ")...");
-                uploadUnsyncedUsers();
+                syncDatabase();
                 fetchAndMergeUsersFromServer(lastSyncTime);
                 Log.d(TAG, "Synchronization completed");
                 return;
@@ -880,68 +1054,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    private void uploadUnsyncedUsers() throws IOException, JSONException {
-        SQLiteDatabase db = getRegisterDatabase();
-        Cursor cursor = db.query(TABLE_NAME, null, COL_IS_SYNCED + " = 0", null, null, null, null);
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .build();
 
-        db.beginTransaction();
-        try {
-            while (cursor.moveToNext()) {
-                String id = cursor.getString(cursor.getColumnIndexOrThrow(COL_ID));
-                String username = cursor.getString(cursor.getColumnIndexOrThrow(COL_USERNAME));
-                String email = cursor.getString(cursor.getColumnIndexOrThrow(COL_EMAIL));
-                String password = cursor.getString(cursor.getColumnIndexOrThrow(COL_PASSWORD));
-                long lastModified = cursor.getLong(cursor.getColumnIndexOrThrow(COL_LAST_MODIFIED));
-                int isSynced = cursor.getInt(cursor.getColumnIndexOrThrow(COL_IS_SYNCED));
-                String syncAction = cursor.getString(cursor.getColumnIndexOrThrow(COL_SYNC_ACTION));
-                String profileImageUrl = cursor.getString(cursor.getColumnIndexOrThrow(COL_PROFILE_IMAGE_URL));
-
-                JSONObject jsonBody = new JSONObject();
-                jsonBody.put(COL_ID, id);
-                jsonBody.put(COL_USERNAME, username);
-                jsonBody.put(COL_EMAIL, email != null ? email : JSONObject.NULL);
-                jsonBody.put(COL_PASSWORD, password);
-                jsonBody.put(COL_LAST_MODIFIED, lastModified);
-                jsonBody.put(COL_IS_SYNCED, isSynced);
-                jsonBody.put(COL_SYNC_ACTION, syncAction);
-                jsonBody.put(COL_PROFILE_IMAGE_URL, profileImageUrl != null ? profileImageUrl : JSONObject.NULL);
-
-                RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
-                Request request = new Request.Builder()
-                        .url(SERVER_URL + "/register.php")
-                        .post(requestBody)
-                        .build();
-
-                try (Response response = client.newCall(request).execute()) {
-                    String responseData = response.body().string();
-                    Log.d(TAG, "Server response for user ID " + id + ": " + responseData);
-                    if (response.isSuccessful()) {
-                        JSONObject jsonResponse = new JSONObject(responseData);
-                        if (jsonResponse.getBoolean("success")) {
-                            ContentValues values = new ContentValues();
-                            values.put(COL_IS_SYNCED, 1);
-                            db.update(TABLE_NAME, values, COL_ID + " = ?", new String[]{id});
-                            Log.d(TAG, "Uploaded unsynced user with ID: " + id);
-                        } else {
-                            Log.e(TAG, "Server rejected user with ID: " + id + ", message: " + jsonResponse.getString("message"));
-                            throw new IOException(jsonResponse.getString("message"));
-                        }
-                    } else {
-                        Log.e(TAG, "Failed to upload user with ID: " + id + ": " + response.code() + " - " + response.message());
-                        throw new IOException("Upload failed: " + response.code() + " - " + response.message());
-                    }
-                }
-            }
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-            cursor.close();
-        }
-    }
 
     public void addGroupInvitation(String groupName, String invitedUserId, SyncCallback callback) {
         SQLiteDatabase db = getRegisterDatabase();

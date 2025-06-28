@@ -30,6 +30,13 @@
         android:layout_marginTop="16dp"
         android:maxLines="1" />
 
+    <Button
+        android:id="@+id/button_confirm_username"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="確認更改姓名" />
+
     <TextView
         android:id="@+id/text_view_user_id"
         android:layout_width="wrap_content"
