@@ -209,7 +209,7 @@ public class ORBActivity extends AppCompatActivity {
         Cursor cursor = null;
         try {
             // Replace raw query with PictureDatabaseHelper.getPictureData()
-            for (int imageId = 1; imageId <= 21; imageId++) { // Assuming IDs 1 to 21 based on logs
+            for (int imageId = 1; imageId <= 218; imageId++) { // Assuming IDs 1 to 21 based on logs
                 PictureDatabaseHelper.PictureData data = dbHelper.getPictureData(imageId);
                 if (data != null) {
                     String locationName = data.locationData != null && !data.locationData.trim().isEmpty() ?
@@ -236,8 +236,7 @@ public class ORBActivity extends AppCompatActivity {
 
     private Bitmap getBitmapFromAsset(String fileName) {
         try {
-            // Load from context.getFilesDir() instead of assets
-            File imageFile = new File(getFilesDir(), fileName);
+            File imageFile = new File(new File(getFilesDir(), "images"), fileName.replace("images/", ""));
             Log.d("ORBActivity", "Loading image from: " + imageFile.getAbsolutePath());
             Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
             if (bitmap == null) {
@@ -246,7 +245,7 @@ public class ORBActivity extends AppCompatActivity {
             return bitmap;
         } catch (Exception e) {
             Log.e("ORBActivity", "Error loading image from file: " + fileName + ", Error: " + e.getMessage());
-            return null;
+            return null; // 返回 null，允許後續邏輯處理缺失情況
         }
     }
 
