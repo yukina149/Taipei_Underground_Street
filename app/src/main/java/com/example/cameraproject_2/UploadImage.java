@@ -128,28 +128,32 @@ public class UploadImage extends AppCompatActivity {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                         Intent resultIntent = result.getData();
                         String locationFromORB = resultIntent.getStringExtra("location");
+                        Log.d("UploadImage", "Received location from ORBActivity: " + locationFromORB);
+
                         if (locationFromORB != null && !locationFromORB.isEmpty()) {
                             currentLocationTextView.setText("Location: " + locationFromORB);
+                            Log.d("UploadImage", "Updated currentLocationTextView to: " + locationFromORB);
 
                             ArrayList<MatchResult> matches = resultIntent.getParcelableArrayListExtra("topMatches");
                             if (matches != null && !matches.isEmpty()) {
                                 topMatches.clear();
                                 topMatches.addAll(matches);
+                                Log.d("UploadImage", "Received topMatches size: " + topMatches.size());
 
                                 if (!topMatches.isEmpty()) {
                                     MatchResult bestMatch = topMatches.get(0);
                                     String imageUriString = bestMatch.getUri();
-                                    Log.d("UploadImage", "Image URI from ORBActivity: " + imageUriString);
+                                    Log.d("UploadImage", "Best match URI: " + imageUriString);
                                     String fileName = imageUriString.replace("file://assets/", "");
-                                    Log.d("UploadImage", "嘗試載入文件: " + fileName);
+                                    Log.d("UploadImage", "Attempting to load file: " + fileName);
                                     try {
                                         InputStream inputStream = getAssets().open(fileName);
                                         Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
                                         inputStream.close();
                                         smallmap.setImageBitmap(bitmap);
-                                        Log.d("UploadImage", "設定 smallmap 圖片: " + fileName);
+                                        Log.d("UploadImage", "Set smallmap image: " + fileName);
                                     } catch (IOException e) {
-                                        Log.e("UploadImage", "載入 smallmap 圖片錯誤: " + fileName + ", 錯誤: " + e.getMessage());
+                                        Log.e("UploadImage", "Failed to load smallmap image: " + fileName + ", Error: " + e.getMessage());
                                         Toast.makeText(this, "無法加載匹配的地圖圖片", Toast.LENGTH_SHORT).show();
                                     }
                                 }
@@ -163,6 +167,7 @@ public class UploadImage extends AppCompatActivity {
                                 buttonIncorrectLocation.setEnabled(false);
                             }
                         } else {
+                            Log.w("UploadImage", "locationFromORB is null or empty");
                             String selectedLocation = resultIntent.getStringExtra("selectedLocation");
                             if (selectedLocation != null && !selectedLocation.isEmpty()) {
                                 currentLocationTextView.setText("Location: " + selectedLocation);
@@ -174,6 +179,7 @@ public class UploadImage extends AppCompatActivity {
                             }
                         }
                     } else {
+                        Log.w("UploadImage", "Result code is not OK or data is null");
                         Toast.makeText(this, "操作取消或失敗", Toast.LENGTH_SHORT).show();
                     }
                 });

@@ -17,7 +17,7 @@ public class PictureDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String TAG = "PictureDatabaseHelper";
     public static final String PICTURE_DB_NAME = "picture.db";
-    private static final int DATABASE_VERSION = 4; // No upgrades needed for pre-packaged DB
+    private static final int DATABASE_VERSION = 5; // No upgrades needed for pre-packaged DB
     private static final String DB_PATH = "/data/data/com.example.cameraproject_2/databases";
 
     private final Context context;
@@ -41,7 +41,7 @@ public class PictureDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion < 4) {
+        if (oldVersion < 5) {
             // 添加新列或修改表結構
             db.execSQL("ALTER TABLE picture_data ADD COLUMN new_column TEXT");
         }
