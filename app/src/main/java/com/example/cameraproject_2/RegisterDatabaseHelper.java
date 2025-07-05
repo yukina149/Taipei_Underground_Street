@@ -85,7 +85,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private static final String KEY_LAST_SYNC_TIME = "last_sync_time";
 
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
-    private static String SERVER_URL = "http://13.239.232.58/android_studio";
+    private static String SERVER_URL = "http://3.107.23.176/android_studio";
 
     private SQLiteDatabase db;
     private static final Object dbLock = new Object();
@@ -96,7 +96,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public RegisterDatabaseHelper(Context context) {
         super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
         this.context = context;
-        SERVER_URL = "http://13.239.232.58/android_studio";
+        SERVER_URL = "http://3.107.23.176/android_studio";
         loadServerUrl();
         checkDatabaseIntegrity();
         cleanInvalidUsers();
@@ -105,7 +105,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
     private void loadServerUrl() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String defaultUrl = "http://13.239.232.58/android_studio";
+        String defaultUrl = "http://3.107.23.176/android_studio";
         SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
         Log.d(TAG, "載入的 SERVER_URL: " + SERVER_URL);
         SharedPreferences.Editor editor = prefs.edit();
@@ -766,6 +766,10 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
     public boolean isInvitationAccepted(String userId, String groupName) {
         SQLiteDatabase db = getRegisterDatabase();
+        if (groupName == null) {
+            Log.w(TAG, "groupName is null, returning false for userId: " + userId);
+            return false; // 如果 groupName 為 null，直接返回 false
+        }
         Cursor cursor = db.query(TABLE_INVITATIONS, new String[]{COL_STATUS},
                 COL_INVITED_USER + "=? AND " + COL_GROUP_NAME + "=? AND " + COL_STATUS + "=?",
                 new String[]{userId, groupName, "accepted"}, null, null, null);
@@ -1118,14 +1122,11 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public List<Invitation> getPendingInvitations(String userId) {
-        SQLiteDatabase db = getRegisterDatabase();
-        Cursor cursor = db.query(TABLE_INVITATIONS,
-                new String[]{COL_INVITATION_ID, COL_GROUP_NAME, COL_STATUS},
-                COL_INVITED_USER + " = ? AND " + COL_STATUS + " = ?",
-                new String[]{userId, "pending"},
-                null, null, null);
-
         List<Invitation> invitations = new ArrayList<>();
+        SQLiteDatabase db = getRegisterDatabase();
+        String selection = COL_INVITED_USER + " = ? AND " + COL_STATUS + " = ?";
+        String[] selectionArgs = {userId != null ? userId : "", "pending"}; // 處理 null userId
+        Cursor cursor = db.query(TABLE_INVITATIONS, null, selection, selectionArgs, null, null, null);
         while (cursor.moveToNext()) {
             String invitationId = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITATION_ID));
             String groupName = cursor.getString(cursor.getColumnIndexOrThrow(COL_GROUP_NAME));
@@ -1134,7 +1135,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             invitations.add(new Invitation(invitationId, groupName, status));
         }
         cursor.close();
-        Log.d(TAG, "用戶ID " + userId + "的待處理邀請數量: " + invitations.size());
         return invitations;
     }
 
@@ -1200,10 +1200,10 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put(COL_MESSAGE_ID, messageId);
         values.put(COL_GROUP_NAME, groupName);
-        values.put(COL_SENDER, sender);
+        values.put(COL_SENDER, sender); // 允許任何發送者
         values.put(COL_MESSAGE, message);
         values.put(COL_TIMESTAMP, timestamp);
-        values.put(COL_IS_SYNCED_MSG, 0);
+        values.put(COL_IS_SYNCED, 0); // 默認未同步
 
         long result = db.insertWithOnConflict(TABLE_MESSAGES, null, values, SQLiteDatabase.CONFLICT_REPLACE);
         if (result != -1) {

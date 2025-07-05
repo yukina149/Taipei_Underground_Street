@@ -57,18 +57,17 @@
             android:name=".CreateGroupActivity"
             android:exported="false" />
         <activity
-            android:name=".MenuMain"
-            android:exported="false" />
-        <activity
             android:name=".CreatAccount"
             android:exported="false" />
         <activity
             android:name=".Chatroom"
+            android:label="Chatroom"
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity
             android:name=".PersonalAccount"
+            android:label="Personal Account"
             android:exported="false"
             android:hardwareAccelerated="false" />
         <activity

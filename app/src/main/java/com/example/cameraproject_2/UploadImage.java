@@ -17,6 +17,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.unity3d.player.UnityPlayerActivity;
@@ -28,6 +29,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 
 public class UploadImage extends AppCompatActivity {
 
@@ -45,6 +48,7 @@ public class UploadImage extends AppCompatActivity {
     private Button buttonCorrectLocation;
     private Button buttonIncorrectLocation;
     private Button buttonUpload;
+    private Button sendToChatButton; // 新增對應的按鈕變量
     private Uri photoUri;
     private Bitmap currentBitmap;
     private String currentBitmapPath;
@@ -77,11 +81,12 @@ public class UploadImage extends AppCompatActivity {
         buttonCorrectLocation = findViewById(R.id.buttonCorrectLocation);
         buttonIncorrectLocation = findViewById(R.id.buttonIncorrectLocation);
         buttonUpload = findViewById(R.id.buttonupload);
+        sendToChatButton = findViewById(R.id.sendtochat); // 初始化 "分享位置" 按鈕
         bottomNavigationView = findViewById(R.id.bottom_navigation);
 
         if (bigmap == null || smallmap == null || currentLocationTextView == null ||
                 buttonCorrectLocation == null || buttonIncorrectLocation == null ||
-                buttonUpload == null || bottomNavigationView == null) {
+                buttonUpload == null || sendToChatButton == null || bottomNavigationView == null) {
             Log.e("UploadImage", "UI components not found in layout, check activity_upload_image.xml");
             Toast.makeText(this, "應用程式初始化失敗，請檢查佈局文件", Toast.LENGTH_LONG).show();
             finish();
@@ -207,6 +212,36 @@ public class UploadImage extends AppCompatActivity {
             finish();
         });
 
+        // "分享位置" 按鈕點擊事件
+        sendToChatButton.setOnClickListener(v -> {
+            // 獲取所有聊天室名稱
+            Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+            if (groupNames == null || groupNames.isEmpty()) {
+                Toast.makeText(this, "您尚未加入任何聊天室", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // 創建多選對話框
+            final boolean[] checkedItems = new boolean[groupNames.size()];
+            final ArrayList<String> groupList = new ArrayList<>(groupNames);
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("選擇要分享的聊天室")
+                    .setMultiChoiceItems(groupList.toArray(new String[0]), checkedItems,
+                            (dialog, which, isChecked) -> checkedItems[which] = isChecked)
+                    .setPositiveButton("確定", (dialog, which) -> {
+                        String currentLocation = currentLocationTextView.getText().toString().replace("Location: ", "");
+                        for (int i = 0; i < checkedItems.length; i++) {
+                            if (checkedItems[i]) {
+                                String selectedGroup = groupList.get(i);
+                                sendLocationToChatroom(selectedGroup, currentLocation);
+                            }
+                        }
+                        Toast.makeText(UploadImage.this, "位置已分享到選定的聊天室", Toast.LENGTH_SHORT).show();
+                    })
+                    .setNegativeButton("取消", (dialog, which) -> dialog.dismiss())
+                    .show();
+        });
+
         // Load and process image from Intent
         Intent intent = getIntent();
         String photoUriString = intent.getStringExtra("photoUri");
@@ -235,6 +270,15 @@ public class UploadImage extends AppCompatActivity {
                 }
             }
         }
+    }
+
+    private void sendLocationToChatroom(String groupName, String location) {
+        Intent intent = new Intent(this, Chatroom.class);
+        intent.putExtra("groupName", groupName);
+        intent.putExtra("locationMessage", "位置分享: " + location);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        Log.d("UploadImage", "Sending location '" + location + "' to chatroom: " + groupName);
     }
 
     private void processImage(Uri photoUri) {

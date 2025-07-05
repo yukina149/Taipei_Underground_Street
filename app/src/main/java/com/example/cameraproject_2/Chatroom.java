@@ -50,6 +50,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.CountDownLatch;
@@ -160,11 +161,23 @@ public class Chatroom extends AppCompatActivity {
         // 處理 Intent 數據
         Intent intent = getIntent();
         groupName = intent.getStringExtra("groupName");
-        members = intent.getStringArrayListExtra("members");
-
-        if (groupName == null || members == null) {
-            groupName = intent.getStringExtra("groupName");
-            if (groupName != null) {
+        String locationMessage = intent.getStringExtra("locationMessage"); // 新增接收 locationMessage
+        if (groupName == null) {
+            Log.e("Chatroom", "groupName is null from Intent, using default or fetching from SharedPreferences");
+            groupName = "taipei underground"; // 設置一個預設值或從其他來源獲取
+            String membersString = sharedPreferences.getString(groupName + "_members", "");
+            members = new ArrayList<>();
+            if (!membersString.isEmpty()) {
+                String[] membersArray = membersString.split(",");
+                for (String member : membersArray) {
+                    String cleanMember = member.trim();
+                    String userId = dbHelper.getUserIdFromUsername(cleanMember);
+                    if (userId != null) members.add(userId);
+                }
+            }
+        } else {
+            members = intent.getStringArrayListExtra("members");
+            if (members == null) {
                 String membersString = sharedPreferences.getString(groupName + "_members", "");
                 members = new ArrayList<>();
                 if (!membersString.isEmpty()) {
@@ -176,24 +189,33 @@ public class Chatroom extends AppCompatActivity {
                     }
                 }
             }
-            if (groupName == null || members.isEmpty()) {
-                Toast.makeText(this, "Failed to load group info", Toast.LENGTH_SHORT).show();
-                finish();
-                return;
-            }
+        }
+        if (groupName == null || members.isEmpty()) {
+            Toast.makeText(this, "Failed to load group info", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
         }
 
         // 設置使用者信息
         Log.d("Chatroom", "Initial userId from prefs: " + sharedPreferences.getString("userId", null));
         currentUserId = sharedPreferences.getString("userId", null);
-        if (currentUserId == null) {
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
             currentUserId = "1"; // 確保這是預設值
             SharedPreferences.Editor editor = sharedPreferences.edit();
             editor.putString("userId", currentUserId);
             editor.apply();
-            Log.w("Chatroom", "userId was null, set to 1");
+            Log.w("Chatroom", "userId was null or empty, set to 1");
         }
         Log.d("Chatroom", "Final userId: " + currentUserId);
+        currentUsername = dbHelper.getUsernameFromUserId(currentUserId);
+        if (currentUsername == null) {
+            currentUsername = "hilda111"; // 預設 username
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("loggedInUser", currentUsername);
+            editor.apply();
+            Log.w("Chatroom", "Username not found, set to hilda111");
+        }
+        Log.d("Chatroom", "Loaded userId: " + currentUserId + ", username: " + currentUsername);
         currentUsername = dbHelper.getUsernameFromUserId(currentUserId);
         if (currentUsername == null) {
             currentUsername = "hilda111"; // 預設 username
@@ -206,8 +228,19 @@ public class Chatroom extends AppCompatActivity {
 
         // 檢查是否為群組建立者
         if (isGroupCreator()) {
-            hasAcceptedInvitation = true; // 建立者自動接受
+            hasAcceptedInvitation = true;
             Log.d("Chatroom", "User " + currentUserId + " is the group creator, setting hasAcceptedInvitation to true");
+        }
+
+        // 處理傳入的 locationMessage
+        if (locationMessage != null && !locationMessage.isEmpty()) {
+            String messageId = dbHelper.generateRandomId();
+            long timestamp = System.currentTimeMillis();
+            if (dbHelper != null) {
+                dbHelper.insertMessage(messageId, groupName, "System", locationMessage, timestamp); // 使用 "System" 作為發送者
+                Log.d("Chatroom", "Inserted location message: " + locationMessage + ", ID: " + messageId);
+                loadMessagesFromDatabase(); // 更新 UI
+            }
         }
 
         // 設置 dbHelper 監聽器
@@ -239,7 +272,6 @@ public class Chatroom extends AppCompatActivity {
     private boolean isGroupCreator() {
         String creatorId = sharedPreferences.getString(groupName + "_creator", null);
         if (creatorId == null) {
-            // 如果沒有記錄創建者，檢查資料庫中的第一個 accepted 邀請是否為當前用戶
             SQLiteDatabase db = dbHelper.getRegisterDatabase();
             Cursor cursor = db.query(TABLE_INVITATIONS,
                     new String[]{COL_INVITED_USER, COL_STATUS},
@@ -248,7 +280,25 @@ public class Chatroom extends AppCompatActivity {
                     null, null, COL_INVITATION_ID + " ASC LIMIT 1");
             boolean isCreator = cursor.moveToFirst() && currentUserId.equals(cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITED_USER)));
             cursor.close();
-            if (isCreator) {
+            if (!isCreator) {
+                // 如果沒有找到創建者記錄，手動插入創建者的 accepted 邀請
+                ContentValues creatorValues = new ContentValues();
+                creatorValues.put(COL_INVITATION_ID, dbHelper.generateRandomId());
+                creatorValues.put(COL_GROUP_NAME, groupName);
+                creatorValues.put(COL_INVITED_USER, currentUserId);
+                creatorValues.put(COL_STATUS, "accepted");
+                creatorValues.put(COL_IS_SYNCED_INV, 0);
+                long result = db.insert(TABLE_INVITATIONS, null, creatorValues);
+                if (result != -1) {
+                    SharedPreferences.Editor editor = sharedPreferences.edit();
+                    editor.putString(groupName + "_creator", currentUserId);
+                    editor.apply();
+                    Log.d("Chatroom", "Inserted creator invitation for " + currentUserId + " in group " + groupName);
+                    isCreator = true;
+                } else {
+                    Log.e("Chatroom", "Failed to insert creator invitation for " + currentUserId + " in group " + groupName);
+                }
+            } else {
                 SharedPreferences.Editor editor = sharedPreferences.edit();
                 editor.putString(groupName + "_creator", currentUserId);
                 editor.apply();
@@ -260,32 +310,48 @@ public class Chatroom extends AppCompatActivity {
     }
 
     public void checkInvitationStatus() {
+        if (dbHelper == null) {
+            dbHelper = new RegisterDatabaseHelper(this);
+        }
+        if (currentUserId == null) {
+            currentUserId = sharedPreferences.getString("userId", "1");
+            Log.w("Chatroom", "currentUserId was null, set to: " + currentUserId);
+        }
         dbHelper.syncInvitations(this, new RegisterDatabaseHelper.SyncCallback() {
             @Override
             public void onSyncComplete(boolean success) {
                 runOnUiThread(() -> {
+                    if (dbHelper == null) {
+                        dbHelper = new RegisterDatabaseHelper(Chatroom.this);
+                    }
                     if (!success) {
                         Toast.makeText(Chatroom.this, "Failed to sync invitations", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    // 檢查當前用戶的待處理邀請
+                    if (currentUserId == null) {
+                        currentUserId = sharedPreferences.getString("userId", "1");
+                        Log.w("Chatroom", "currentUserId was null in onSyncComplete, set to: " + currentUserId);
+                    }
                     List<Invitation> pendingInvitations = dbHelper.getPendingInvitations(currentUserId);
-                    Log.d("Chatroom", "Pending invitations for " + currentUserId + ": " + pendingInvitations.size() + ", Details: " + pendingInvitations);
+                    Log.d("Chatroom", "Pending invitations for " + currentUserId + ": " + (pendingInvitations != null ? pendingInvitations.size() : 0) + ", Details: " + pendingInvitations);
 
-                    hasAcceptedInvitation = dbHelper.isInvitationAccepted(currentUserId, groupName); // 更新邀請狀態
+                    // 僅非創建者檢查邀請狀態
+                    if (!isGroupCreator()) {
+                        hasAcceptedInvitation = dbHelper.isInvitationAccepted(currentUserId, groupName);
+                    }
 
-                    if (!pendingInvitations.isEmpty()) {
+                    if (pendingInvitations != null && !pendingInvitations.isEmpty()) {
                         for (Invitation invitation : pendingInvitations) {
                             if ("pending".equals(invitation.getStatus()) && invitation.getGroupName().equals(groupName)) {
                                 showInvitationDialog(invitation);
-                                break; // 只顯示第一個待處理邀請
+                                break;
                             }
                         }
                     } else {
                         Log.w("Chatroom", "No pending invitations found for user " + currentUserId);
                     }
 
-                    updateUI(); // 更新 UI 根據 hasAcceptedInvitation
+                    updateUI();
                     updateNavigationMenu();
                 });
             }
@@ -619,6 +685,9 @@ public class Chatroom extends AppCompatActivity {
                                         String messageText = messageObj.has("message") ? messageObj.getString("message") : "";
                                         long timestamp = messageObj.has("timestamp") ? messageObj.getLong("timestamp") : System.currentTimeMillis();
 
+                                        // 假設需要從 UTC 轉為本地時間（如果伺服器返回 UTC）
+                                        timestamp = timestamp + TimeZone.getDefault().getOffset(timestamp);
+
                                         if (!messageId.equals(lastMessageId)) {
                                             if (dbHelper != null) {
                                                 dbHelper.insertMessage(messageId, groupName, sender, messageText, timestamp);
@@ -651,12 +720,17 @@ public class Chatroom extends AppCompatActivity {
 
     private String formatTimestamp(long timestamp) {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        sdf.setTimeZone(TimeZone.getDefault()); // 使用手機當地時區
         return sdf.format(new Date(timestamp));
     }
 
     private void loadMessagesFromDatabase() {
-        if (dbHelper == null || messageList == null || messageAdapter == null || messageRecyclerView == null) {
-            Log.e("Chatroom", "UI components or dbHelper are null, skipping load");
+        if (dbHelper == null) {
+            dbHelper = new RegisterDatabaseHelper(this);
+            Log.w("Chatroom", "dbHelper was null, reinitialized");
+        }
+        if (messageList == null || messageAdapter == null || messageRecyclerView == null) {
+            Log.e("Chatroom", "UI components are null, skipping load");
             return;
         }
 
@@ -687,7 +761,7 @@ public class Chatroom extends AppCompatActivity {
                 messageList.addAll(newMessages);
                 messageAdapter.notifyDataSetChanged();
                 messageRecyclerView.scrollToPosition(messageList.size() - 1);
-                Log.d("Chatroom", "UI updated with " + messageList.size() + " messages, lastMessageId: " + lastMessageId);
+                Log.w("Cdhatroom", "UI updated with " + messageList.size() + " messages, lastMessageId: " + lastMessageId);
             }
         });
     }
@@ -763,6 +837,9 @@ public class Chatroom extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (dbHelper == null) {
+            dbHelper = new RegisterDatabaseHelper(this);
+        }
         updateNavigationMenu();
         checkInvitationStatus();
         isPollingActive = true;
@@ -770,7 +847,6 @@ public class Chatroom extends AppCompatActivity {
         loadMessagesFromDatabase();
         startMessagePolling();
 
-        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
         dbHelper.checkInvitationStatus(currentUserId); // currentUserId 為 XDGXC 或 1
     }
 
@@ -785,14 +861,14 @@ public class Chatroom extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         isPollingActive = false;
-        if (executorService != null) {
+        if (executorService != null && !executorService.isShutdown()) {
             executorService.shutdown();
         }
         if (dbHelper != null) {
             dbHelper.setOnMessageInsertedListener(null);
             dbHelper.closeDatabase();
-            dbHelper = null;
         }
+        // 不將 dbHelper 設置為 null，讓下次初始化處理
     }
 
     @Override

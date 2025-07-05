@@ -89,22 +89,36 @@
                     <!-- 偵測結果（原 currentLocation） -->
                     <TextView
                         android:id="@+id/currentLocationTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_width="227dp"
+                        android:layout_height="53dp"
                         android:layout_marginStart="10dp"
                         android:layout_marginTop="4dp"
                         android:layout_marginEnd="10dp"
-                        android:gravity="start"
+                        android:background="#F9F9F9"
+                        android:gravity="start|center_vertical"
                         android:text="偵測結果："
                         android:textColor="#FF000000"
                         android:textSize="20sp"
                         android:textStyle="bold"
-                        android:background="#F9F9F9"
-                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintEnd_toStartOf="@id/sendtochat"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/currentLocation" />
 
+
                     <!-- 指引線，位於螢幕寬度中間 -->
+                    <Button
+                        android:id="@+id/sendtochat"
+                        android:layout_width="150dp"
+                        android:layout_height="60dp"
+                        android:layout_marginEnd="10dp"
+                        android:backgroundTint="@color/mainbutton"
+                        android:text="分享位置"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toTopOf="@id/currentLocationTextView" />
+
                     <androidx.constraintlayout.widget.Guideline
                         android:id="@+id/guideline"
                         android:layout_width="wrap_content"

@@ -67,7 +67,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private static final int REQUEST_CAMERA_PERMISSION_CODE = 1;
     private static final int REQUEST_NOTIFICATION_PERMISSION_CODE = 1002;
-    private static final String INVITATION_CHECK_URL = "http://13.239.232.58/android_studio/fetch_invitations.php";
+    private static final String INVITATION_CHECK_URL = "http://3.107.23.176/android_studio/fetch_invitations.php";
     private static final String USER_ID_KEY = "userId";
     private static final String LOGGED_IN_USER_KEY = "loggedInUser";
     private static final long CHECK_INTERVAL = 30000;
@@ -139,10 +139,34 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 Toast.makeText(this, R.string.home_page, Toast.LENGTH_SHORT).show();
             } else if (id == R.id.chat) {
                 boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
-                Intent intent = new Intent(MainActivity.this, isLoggedIn ? Chatroom.class : PersonalAccount.class);
-                startActivity(intent);
+                Log.d("MainActivity", "Navigating to Chatroom, isLoggedIn: " + isLoggedIn);
+                if (!isLoggedIn) {
+                    Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
+                    startActivity(intent);
+                } else {
+                    Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+                    if (groupNames == null || groupNames.isEmpty()) {
+                        Intent intent = new Intent(MainActivity.this, CreateGroupActivity.class);
+                        startActivity(intent);
+                    } else {
+                        String defaultGroup = groupNames.iterator().next(); // 取第一個群組
+                        String membersString = sharedPreferences.getString(defaultGroup + "_members", "");
+                        List<String> members = new ArrayList<>();
+                        if (!membersString.isEmpty()) {
+                            String[] membersArray = membersString.split(",");
+                            for (String member : membersArray) {
+                                members.add(member.trim());
+                            }
+                        }
+                        Intent intent = new Intent(MainActivity.this, Chatroom.class);
+                        intent.putExtra("groupName", defaultGroup);
+                        intent.putStringArrayListExtra("members", new ArrayList<>(members));
+                        startActivity(intent);
+                    }
+                }
                 overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             } else if (id == R.id.nav_member) {
+                // 保持原有邏輯不變
                 boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
                 Intent intent = new Intent(MainActivity.this, isLoggedIn ? UserProfileActivity.class : PersonalAccount.class);
                 intent.putExtra("isLoggedIn", isLoggedIn);

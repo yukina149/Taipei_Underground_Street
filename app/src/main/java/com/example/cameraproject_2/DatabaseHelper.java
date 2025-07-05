@@ -63,7 +63,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         this.context = context;
         this.dbPath = context.getDatabasePath(REGISTER_DB_NAME).getPath();
         //setServerUrl("http://192.168.10.15:8080"); // 強制設置正確 URL，192.168.10.15
-        setServerUrl("http://13.239.232.58/android_studio/register.php"); // 模擬器
+        setServerUrl("http://3.107.23.176/android_studio/register.php"); // 模擬器
         loadServerUrl();
     }
 
@@ -81,7 +81,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private void loadServerUrl() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         // 如果你在模擬器上運行，使用 10.0.2.2；如果在真機上運行，使用你電腦的 IP
-        String defaultUrl = "http://13.239.232.58/android_studio/register.php"; // 模擬器
+        String defaultUrl = "http://3.107.23.176/android_studio/register.php"; // 模擬器
         // String defaultUrl = "http://192.168.1.100/android_studio"; // 真機
         SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
         Log.d(TAG, "Loaded server URL from prefs: " + SERVER_URL);

@@ -28,6 +28,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.squareup.picasso.MemoryPolicy;
 import com.squareup.picasso.Picasso;
 
 import org.json.JSONException;
@@ -35,6 +36,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -274,8 +276,12 @@ public class UserProfileActivity extends AppCompatActivity {
     }
 
     private void uploadProfileImage(Uri imageUri, final String userId) {
-        OkHttpClient client = new OkHttpClient();
-        String url = "http://13.239.232.58/android_studio/upload_profile_image.php";
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .build();
+        String url = "http://3.107.23.176/android_studio/upload_profile_image.php";
 
         File file = new File(getRealPathFromURI(imageUri));
         Log.d(TAG, "Uploading image for userId: " + userId + ", file path: " + file.getAbsolutePath() + ", file exists: " + file.exists() + ", file size: " + file.length());
@@ -327,6 +333,7 @@ public class UserProfileActivity extends AppCompatActivity {
                         editor.apply();
                         runOnUiThread(() -> {
                             Picasso.get().load(imageUrl)
+                                    .memoryPolicy(MemoryPolicy.NO_CACHE, MemoryPolicy.NO_STORE) // 禁用記憶體和磁碟快取
                                     .error(R.drawable.user)
                                     .placeholder(R.drawable.user)
                                     .into(profileImage, new com.squareup.picasso.Callback() {
