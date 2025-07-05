@@ -105,31 +105,36 @@ public class CreateGroupActivity extends AppCompatActivity {
                 return;
             }
 
-            String currentUser = sharedPreferences.getString("loggedInUser", "Unknown");
-            if (!selectedMembers.contains(currentUser)) {
-                selectedMembers.add(currentUser);
+            String currentUserId = sharedPreferences.getString("userId", null);
+            if (currentUserId == null) {
+                Toast.makeText(this, "請先登錄", Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(this, PersonalAccount.class));
+                finish();
+                return;
             }
 
-            saveGroup(groupName, selectedMembers);
+            if (!selectedMembers.contains(currentUserId)) {
+                selectedMembers.add(currentUserId);
+            }
 
-            CountDownLatch latch = new CountDownLatch(selectedMembers.size() - 1);
+            // 調用 createGroup 方法來處理群組創建和邀請插入
+            createGroup(groupName, selectedMembers);
+
+            // 同步邀請到伺服器
+            CountDownLatch latch = new CountDownLatch(selectedMembers.size());
             for (String member : selectedMembers) {
-                if (!member.equals(currentUser)) {
-                    Log.d("CreateGroupActivity", "Attempting to add invitation for user: " + member + " to group: " + groupName);
-                    dbHelper.addGroupInvitation(groupName, member, new RegisterDatabaseHelper.SyncCallback() {
-                        @Override
-                        public void onSyncComplete(boolean success) {
-                            if (success) {
-                                Log.d("CreateGroupActivity", "Invitation synced for user: " + member);
-                            } else {
-                                Log.e("CreateGroupActivity", "Invitation sync failed for user: " + member);
-                            }
-                            latch.countDown();
+                Log.d("CreateGroupActivity", "Attempting to add invitation for user: " + member + " to group: " + groupName);
+                dbHelper.addGroupInvitation(groupName, member, new RegisterDatabaseHelper.SyncCallback() {
+                    @Override
+                    public void onSyncComplete(boolean success) {
+                        if (success) {
+                            Log.d("CreateGroupActivity", "Invitation synced for user: " + member);
+                        } else {
+                            Log.e("CreateGroupActivity", "Invitation sync failed for user: " + member);
                         }
-                    });
-                } else {
-                    latch.countDown();
-                }
+                        latch.countDown();
+                    }
+                });
             }
 
             new Thread(() -> {
@@ -151,57 +156,23 @@ public class CreateGroupActivity extends AppCompatActivity {
         });
     }
 
-    public void onCreateGroupClick(View view) {
-        EditText editTextGroupName = findViewById(R.id.editTextGroupName);
-        String groupName = editTextGroupName.getText().toString().trim();
-        if (groupName.isEmpty()) {
-            Toast.makeText(this, "Please enter a group name", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        List<String> selectedMembers = memberAdapter.getSelectedMembers();
-        if (selectedMembers.isEmpty()) {
-            Toast.makeText(this, "Please select at least one member", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        dbHelper = new RegisterDatabaseHelper(this);
-        for (String userId : selectedMembers) {
-            dbHelper.addGroupInvitation(groupName, userId, new RegisterDatabaseHelper.SyncCallback() {
-                @Override
-                public void onSyncComplete(boolean success) {
-                    if (success) {
-                        Log.d("CreateGroupActivity", "Successfully added invitation for user: " + userId);
-                    } else {
-                        Log.e("CreateGroupActivity", "Invitation sync failed for user: " + userId);
-                    }
-                }
-            });
-        }
-
-        // 保存群組和成員到 SharedPreferences
-        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-        SharedPreferences.Editor editor = prefs.edit();
-        Set<String> groupNames = prefs.getStringSet("groupNames", new HashSet<>());
-        groupNames.add(groupName);
-        editor.putStringSet("groupNames", groupNames);
-        editor.putString(groupName + "_members", String.join(",", selectedMembers));
-        editor.apply();
-
-        Log.d("CreateGroupActivity", "Saved group: " + groupName + " with members: " + String.join(", ", selectedMembers));
-        Toast.makeText(this, "Group created: " + groupName, Toast.LENGTH_SHORT).show();
-        finish();
-    }
-
     public void createGroup(String groupName, List<String> memberUserIds) {
-        RegisterDatabaseHelper dbHelper = new RegisterDatabaseHelper(this);
         SQLiteDatabase db = dbHelper.getRegisterDatabase();
 
         // 獲取當前用戶作為建立者
-        String creatorId = sharedPreferences.getString("userId", "1");
-        String invitationId = dbHelper.generateRandomId();
+        String creatorId = sharedPreferences.getString("userId", null);
+        if (creatorId == null) {
+            Log.e("CreateGroupActivity", "Creator ID is null, redirecting to login");
+            runOnUiThread(() -> {
+                Toast.makeText(this, "請先登錄", Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(this, PersonalAccount.class));
+                finish();
+            });
+            return;
+        }
 
         // 為建立者插入 accepted 邀請
+        String invitationId = dbHelper.generateRandomId();
         ContentValues creatorValues = new ContentValues();
         creatorValues.put(COL_INVITATION_ID, invitationId);
         creatorValues.put(COL_GROUP_NAME, groupName);
@@ -211,16 +182,11 @@ public class CreateGroupActivity extends AppCompatActivity {
         long result = db.insert(TABLE_INVITATIONS, null, creatorValues);
         if (result == -1) {
             Log.e("CreateGroupActivity", "Failed to insert creator invitation for group: " + groupName);
+            runOnUiThread(() -> Toast.makeText(this, "無法為創建者插入邀請", Toast.LENGTH_SHORT).show());
+            return;
         } else {
             Log.d("CreateGroupActivity", "Inserted creator invitation for group: " + groupName + ", invitationId: " + invitationId);
         }
-
-        // 將創建者記錄到 SharedPreferences
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putString(groupName + "_creator", creatorId);
-        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
-        groupNames.add(groupName);
-        editor.putStringSet("groupNames", groupNames);
 
         // 為其他成員添加 pending 邀請
         for (String memberId : memberUserIds) {
@@ -232,30 +198,25 @@ public class CreateGroupActivity extends AppCompatActivity {
                 memberValues.put(COL_INVITED_USER, memberId);
                 memberValues.put(COL_STATUS, "pending");
                 memberValues.put(COL_IS_SYNCED_INV, 0);
-                db.insert(TABLE_INVITATIONS, null, memberValues);
+                result = db.insert(TABLE_INVITATIONS, null, memberValues);
+                if (result == -1) {
+                    Log.e("CreateGroupActivity", "Failed to insert invitation for member: " + memberId);
+                } else {
+                    Log.d("CreateGroupActivity", "Inserted invitation for member: " + memberId + ", group: " + groupName);
+                }
             }
         }
 
-        // 更新成員列表
-        List<String> allMembers = new ArrayList<>(memberUserIds);
-        allMembers.add(creatorId); // 包括建立者
-        String membersString = String.join(",", allMembers);
-        editor.putString(groupName + "_members", membersString);
-        editor.apply();
-
-        dbHelper.closeDatabase();
-        Toast.makeText(this, "Group created: " + groupName, Toast.LENGTH_SHORT).show();
-        startActivity(new Intent(this, Chatroom.class).putExtra("groupName", groupName));
-    }
-
-    private void saveGroup(String groupName, List<String> members) {
+        // 更新 SharedPreferences
         SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString(groupName + "_creator", creatorId);
         Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
         groupNames.add(groupName);
         editor.putStringSet("groupNames", groupNames);
-        editor.putString(groupName + "_members", String.join(",", members));
+        editor.putString(groupName + "_members", String.join(",", memberUserIds));
         editor.apply();
-        Log.d("CreateGroupActivity", "Saved group: " + groupName + " with members: " + String.join(", ", members));
+
+        Log.d("CreateGroupActivity", "Saved group: " + groupName + " with members: " + String.join(", ", memberUserIds));
     }
 
     private User getUserById(String userId) {

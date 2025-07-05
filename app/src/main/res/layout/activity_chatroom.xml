@@ -19,6 +19,7 @@
             android:layout_height="wrap_content"
             android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
+
             <!-- Toolbar -->
             <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
@@ -27,6 +28,13 @@
                 android:background="#3F51B5"
                 android:elevation="4dp"
                 app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
+            <Button
+                android:id="@+id/buttonRefresh"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="刷新訊息"
+                android:layout_below="@id/textViewMembers"
+                android:layout_centerHorizontal="true" />
         </com.google.android.material.appbar.AppBarLayout>
 
         <!-- 主內容 -->
@@ -77,6 +85,8 @@
                 app:layout_constraintBottom_toTopOf="@id/messageInputLayout"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent" />
+
+
 
             <!-- 輸入框和發送按鈕 -->
             <LinearLayout

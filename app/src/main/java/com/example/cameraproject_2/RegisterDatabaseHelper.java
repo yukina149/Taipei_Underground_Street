@@ -23,6 +23,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 
@@ -39,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -778,6 +780,77 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         return isAccepted;
     }
 
+    //支援離線同步，等待有網路後上傳
+    public void syncPendingMessages(Context context) {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_MESSAGES,
+                new String[]{COL_MESSAGE_ID, COL_GROUP_NAME, COL_SENDER, COL_MESSAGE, COL_TIMESTAMP},
+                COL_IS_SYNCED + "=0",
+                null, null, null, null);
+
+        while (cursor.moveToNext()) {
+            String messageId = cursor.getString(cursor.getColumnIndexOrThrow(COL_MESSAGE_ID));
+            String groupName = cursor.getString(cursor.getColumnIndexOrThrow(COL_GROUP_NAME));
+            String sender = cursor.getString(cursor.getColumnIndexOrThrow(COL_SENDER));
+            String message = cursor.getString(cursor.getColumnIndexOrThrow(COL_MESSAGE));
+            long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(COL_TIMESTAMP));
+
+            sendMessageToServer(context, groupName, sender, message, messageId, timestamp);
+        }
+        cursor.close();
+    }
+
+    private void sendMessageToServer(Context context, String groupName, String sender, String message, String messageId, long timestamp) {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .build();
+        try {
+            JSONObject jsonBody = new JSONObject();
+            jsonBody.put("group_name", groupName);
+            jsonBody.put("sender", sender);
+            jsonBody.put("message", message);
+            jsonBody.put("message_id", messageId);
+            jsonBody.put("timestamp", timestamp);
+
+            RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
+            Request request = new Request.Builder()
+                    .url(getServerUrl() + "/send_message.php")
+                    .post(requestBody)
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.e("RegisterDatabaseHelper", "Failed to sync message: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        try {
+                            String responseData = response.body().string();
+                            JSONObject jsonResponse = new JSONObject(responseData);
+                            if (jsonResponse.getBoolean("success")) {
+                                updateMessageSyncStatus(messageId, 1);
+                                Log.d("RegisterDatabaseHelper", "Message synced: ID=" + messageId);
+                            } else {
+                                Log.e("RegisterDatabaseHelper", "Server error: " + jsonResponse.optString("message", "未知錯誤"));
+                            }
+                        } catch (JSONException e) {
+                            Log.e("RegisterDatabaseHelper", "JSON parse error: " + e.getMessage());
+                        }
+                    } else {
+                        Log.e("RegisterDatabaseHelper", "Server error: " + response.code());
+                    }
+                    response.close();
+                }
+            });
+        } catch (JSONException e) {
+            Log.e("RegisterDatabaseHelper", "JSON error: " + e.getMessage());
+        }
+    }
+
     public void insertInvitation(String invitationId, String groupName, String invitedUser, String status, int isSynced) {
         SQLiteDatabase db = getRegisterDatabase();
         ContentValues values = new ContentValues();
@@ -1200,10 +1273,10 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put(COL_MESSAGE_ID, messageId);
         values.put(COL_GROUP_NAME, groupName);
-        values.put(COL_SENDER, sender); // 允許任何發送者
+        values.put(COL_SENDER, sender);
         values.put(COL_MESSAGE, message);
         values.put(COL_TIMESTAMP, timestamp);
-        values.put(COL_IS_SYNCED, 0); // 默認未同步
+        values.put(COL_IS_SYNCED_MSG, 0);
 
         long result = db.insertWithOnConflict(TABLE_MESSAGES, null, values, SQLiteDatabase.CONFLICT_REPLACE);
         if (result != -1) {
@@ -1324,6 +1397,18 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             cursor.close();
         }
     }
+    public boolean isMessageExists(String messageId) {
+        SQLiteDatabase db = getRegisterDatabase();
+        Cursor cursor = db.query(TABLE_MESSAGES,
+                new String[]{COL_MESSAGE_ID},
+                COL_MESSAGE_ID + "=?",
+                new String[]{messageId},
+                null, null, null);
+        boolean exists = cursor.moveToFirst();
+        cursor.close();
+        return exists;
+    }
+
 
     private void fetchAndMergeInvitationsFromServer() throws IOException, JSONException {
         if (!isNetworkAvailable()) {

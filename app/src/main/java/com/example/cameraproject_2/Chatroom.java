@@ -41,7 +41,6 @@ import com.google.android.material.navigation.NavigationView;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -51,13 +50,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.MediaType;
@@ -70,6 +65,7 @@ public class Chatroom extends AppCompatActivity {
     private RecyclerView messageRecyclerView;
     private EditText editTextMessage;
     private Button buttonSend;
+    private Button buttonRefresh;
     private TextView textViewGroupName;
     private TextView textViewMembers;
     private List<String> messageList;
@@ -87,163 +83,144 @@ public class Chatroom extends AppCompatActivity {
     private NavigationView navigationView;
     private DrawerLayout drawerLayout;
     private SharedPreferences sharedPreferences;
+    private int pollingRetryCount = 0;
+    private static final int MAX_POLLING_RETRIES = 3;
+    private static final long POLLING_INTERVAL_MS = 5000;
+    private static final long POLLING_INTERVAL_RETRY_MS = 10000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chatroom);
 
-        if (dbHelper == null) {
-            dbHelper = new RegisterDatabaseHelper(this);
-        }
-
-        // 初始化 SharedPreferences
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        executorService = Executors.newSingleThreadExecutor();
 
-        // 初始化 UI 組件
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
         Toolbar toolbar = findViewById(R.id.toolbar);
         messageRecyclerView = findViewById(R.id.messageRecyclerView);
         editTextMessage = findViewById(R.id.editTextMessage);
         buttonSend = findViewById(R.id.buttonSend);
+        buttonRefresh = findViewById(R.id.buttonRefresh);
         textViewGroupName = findViewById(R.id.textViewGroupName);
         textViewMembers = findViewById(R.id.textViewMembers);
 
-        // 設置 Toolbar
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setTitle("taipei underground");
             getSupportActionBar().setDisplayShowTitleEnabled(true);
         }
 
-        // 初始化 dbHelper
         dbHelper = new RegisterDatabaseHelper(this);
 
-        // 檢查 UI 組件和 dbHelper 是否為 null
         if (drawerLayout == null || navigationView == null || toolbar == null ||
                 messageRecyclerView == null || editTextMessage == null || buttonSend == null ||
-                textViewGroupName == null || textViewMembers == null || dbHelper == null) {
-            Log.e("Chatroom", "UI components or dbHelper are null, details - " +
+                buttonRefresh == null || textViewGroupName == null || textViewMembers == null || dbHelper == null) {
+            Log.e("Chatroom", "Initialization failed: " +
                     "drawerLayout=" + (drawerLayout != null) +
                     ", navView=" + (navigationView != null) +
                     ", toolbar=" + (toolbar != null) +
                     ", recyclerView=" + (messageRecyclerView != null) +
                     ", editText=" + (editTextMessage != null) +
-                    ", button=" + (buttonSend != null) +
+                    ", buttonSend=" + (buttonSend != null) +
+                    ", buttonRefresh=" + (buttonRefresh != null) +
                     ", groupName=" + (textViewGroupName != null) +
                     ", members=" + (textViewMembers != null) +
                     ", dbHelper=" + (dbHelper != null));
-            Toast.makeText(this, "Initialization failed", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "初始化失敗", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        // 註冊廣播接收器
         registerReceiver(invitationReceiver, new IntentFilter("com.example.cameraproject_2.INVITATION_UPDATED"), Context.RECEIVER_NOT_EXPORTED);
 
-        // 設置 Drawer
         toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.open, R.string.close);
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
 
-        // 後續初始化邏輯
-        setupDrawer();
-        updateNavigationMenu();
-        checkInvitationStatus();
-
-        // 設置 RecyclerView
         messageList = new ArrayList<>();
         messageAdapter = new MessageAdapter(messageList);
         messageRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         messageRecyclerView.setAdapter(messageAdapter);
 
-        // 處理 Intent 數據
         Intent intent = getIntent();
         groupName = intent.getStringExtra("groupName");
-        String locationMessage = intent.getStringExtra("locationMessage"); // 新增接收 locationMessage
+        String locationMessage = intent.getStringExtra("locationMessage");
         if (groupName == null) {
-            Log.e("Chatroom", "groupName is null from Intent, using default or fetching from SharedPreferences");
-            groupName = "taipei underground"; // 設置一個預設值或從其他來源獲取
-            String membersString = sharedPreferences.getString(groupName + "_members", "");
+            Log.e("Chatroom", "groupName is null from Intent");
+            groupName = sharedPreferences.getString("lastGroupName", "taipei underground");
+            if (groupName.isEmpty()) {
+                Toast.makeText(this, "未選擇群組", Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+        }
+
+        members = intent.getStringArrayListExtra("members");
+        if (members == null) {
             members = new ArrayList<>();
+            String membersString = sharedPreferences.getString(groupName + "_members", "");
             if (!membersString.isEmpty()) {
                 String[] membersArray = membersString.split(",");
                 for (String member : membersArray) {
                     String cleanMember = member.trim();
                     String userId = dbHelper.getUserIdFromUsername(cleanMember);
-                    if (userId != null) members.add(userId);
-                }
-            }
-        } else {
-            members = intent.getStringArrayListExtra("members");
-            if (members == null) {
-                String membersString = sharedPreferences.getString(groupName + "_members", "");
-                members = new ArrayList<>();
-                if (!membersString.isEmpty()) {
-                    String[] membersArray = membersString.split(",");
-                    for (String member : membersArray) {
-                        String cleanMember = member.trim();
-                        String userId = dbHelper.getUserIdFromUsername(cleanMember);
-                        if (userId != null) members.add(userId);
+                    if (userId != null && !members.contains(userId)) {
+                        members.add(userId);
                     }
                 }
             }
         }
-        if (groupName == null || members.isEmpty()) {
-            Toast.makeText(this, "Failed to load group info", Toast.LENGTH_SHORT).show();
+
+        if (members.isEmpty()) {
+            Log.w("Chatroom", "Members list is empty for group: " + groupName);
+            Toast.makeText(this, "群組無成員", Toast.LENGTH_SHORT).show();
+        }
+
+        currentUserId = sharedPreferences.getString("userId", null);
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
+            Log.e("Chatroom", "No userId found in SharedPreferences, redirecting to login");
+            Toast.makeText(this, "請先登錄", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(this, PersonalAccount.class));
             finish();
             return;
         }
 
-        // 設置使用者信息
-        Log.d("Chatroom", "Initial userId from prefs: " + sharedPreferences.getString("userId", null));
-        currentUserId = sharedPreferences.getString("userId", null);
-        if (currentUserId == null || currentUserId.trim().isEmpty()) {
-            currentUserId = "1"; // 確保這是預設值
-            SharedPreferences.Editor editor = sharedPreferences.edit();
-            editor.putString("userId", currentUserId);
-            editor.apply();
-            Log.w("Chatroom", "userId was null or empty, set to 1");
-        }
-        Log.d("Chatroom", "Final userId: " + currentUserId);
         currentUsername = dbHelper.getUsernameFromUserId(currentUserId);
         if (currentUsername == null) {
-            currentUsername = "hilda111"; // 預設 username
+            Log.e("Chatroom", "Username not found for userId: " + currentUserId);
+            currentUsername = "訪客";
             SharedPreferences.Editor editor = sharedPreferences.edit();
             editor.putString("loggedInUser", currentUsername);
             editor.apply();
-            Log.w("Chatroom", "Username not found, set to hilda111");
         }
-        Log.d("Chatroom", "Loaded userId: " + currentUserId + ", username: " + currentUsername);
-        currentUsername = dbHelper.getUsernameFromUserId(currentUserId);
-        if (currentUsername == null) {
-            currentUsername = "hilda111"; // 預設 username
-            SharedPreferences.Editor editor = sharedPreferences.edit();
-            editor.putString("loggedInUser", currentUsername);
-            editor.apply();
-            Log.w("Chatroom", "Username not found, set to hilda111");
-        }
-        Log.d("Chatroom", "Loaded userId: " + currentUserId + ", username: " + currentUsername);
+        Log.d("Chatroom", "User initialized: userId=" + currentUserId + ", username=" + currentUsername);
 
-        // 檢查是否為群組建立者
         if (isGroupCreator()) {
             hasAcceptedInvitation = true;
             Log.d("Chatroom", "User " + currentUserId + " is the group creator, setting hasAcceptedInvitation to true");
+        } else {
+            hasAcceptedInvitation = dbHelper.isInvitationAccepted(currentUserId, groupName);
+            Log.d("Chatroom", "User " + currentUserId + " hasAcceptedInvitation: " + hasAcceptedInvitation);
         }
 
-        // 處理傳入的 locationMessage
         if (locationMessage != null && !locationMessage.isEmpty()) {
             String messageId = dbHelper.generateRandomId();
             long timestamp = System.currentTimeMillis();
-            if (dbHelper != null) {
-                dbHelper.insertMessage(messageId, groupName, "System", locationMessage, timestamp); // 使用 "System" 作為發送者
-                Log.d("Chatroom", "Inserted location message: " + locationMessage + ", ID: " + messageId);
-                loadMessagesFromDatabase(); // 更新 UI
+            dbHelper.insertMessage(messageId, groupName, "System", locationMessage, timestamp);
+            Log.d("Chatroom", "Inserted location message: " + locationMessage + ", ID: " + messageId);
+
+            if (isNetworkAvailable()) {
+                sendMessageToServer(groupName, "System", locationMessage, messageId, timestamp);
+            } else {
+                Log.w("Chatroom", "No network available, location message stored locally");
+                Toast.makeText(this, "無網路連線，位置訊息已儲存至本地", Toast.LENGTH_SHORT).show();
             }
+
+            loadMessagesFromDatabase();
         }
 
-        // 設置 dbHelper 監聽器
         dbHelper.setOnMessageInsertedListener(groupName1 -> {
             if (groupName1 != null && groupName1.equals(groupName)) {
                 runOnUiThread(this::loadMessagesFromDatabase);
@@ -251,22 +228,20 @@ public class Chatroom extends AppCompatActivity {
             }
         });
 
-        // 初始化 ExecutorService
-        executorService = Executors.newSingleThreadExecutor();
+        textViewGroupName.setText("群組: " + groupName);
+        textViewMembers.setText("成員: " + String.join(", ", members));
+        updateUI();
+        Toast.makeText(this, "歡迎來到 " + groupName + ", " + currentUsername + "!", Toast.LENGTH_SHORT).show();
 
-        // 更新 UI
-        textViewGroupName.setText("Group: " + groupName);
-        textViewMembers.setText("Members: " + String.join(", ", members));
-        updateUI(); // 根據 hasAcceptedInvitation 更新 UI
-        Toast.makeText(this, "Welcome to " + groupName + ", " + currentUsername + "!", Toast.LENGTH_SHORT).show();
-
-        // 設置按鈕監聽器
         buttonSend.setOnClickListener(this::onSendButtonClick);
+        buttonRefresh.setOnClickListener(v -> refreshMessages());
         loadMessagesFromDatabase();
+        debugLocalMessages();
         startMessagePolling();
 
-        // 設置 NavigationView 監聽器
         navigationView.setNavigationItemSelectedListener(this::handleNavigationItemSelected);
+        updateNavigationMenu();
+        checkInvitationStatus();
     }
 
     private boolean isGroupCreator() {
@@ -280,25 +255,7 @@ public class Chatroom extends AppCompatActivity {
                     null, null, COL_INVITATION_ID + " ASC LIMIT 1");
             boolean isCreator = cursor.moveToFirst() && currentUserId.equals(cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITED_USER)));
             cursor.close();
-            if (!isCreator) {
-                // 如果沒有找到創建者記錄，手動插入創建者的 accepted 邀請
-                ContentValues creatorValues = new ContentValues();
-                creatorValues.put(COL_INVITATION_ID, dbHelper.generateRandomId());
-                creatorValues.put(COL_GROUP_NAME, groupName);
-                creatorValues.put(COL_INVITED_USER, currentUserId);
-                creatorValues.put(COL_STATUS, "accepted");
-                creatorValues.put(COL_IS_SYNCED_INV, 0);
-                long result = db.insert(TABLE_INVITATIONS, null, creatorValues);
-                if (result != -1) {
-                    SharedPreferences.Editor editor = sharedPreferences.edit();
-                    editor.putString(groupName + "_creator", currentUserId);
-                    editor.apply();
-                    Log.d("Chatroom", "Inserted creator invitation for " + currentUserId + " in group " + groupName);
-                    isCreator = true;
-                } else {
-                    Log.e("Chatroom", "Failed to insert creator invitation for " + currentUserId + " in group " + groupName);
-                }
-            } else {
+            if (isCreator) {
                 SharedPreferences.Editor editor = sharedPreferences.edit();
                 editor.putString(groupName + "_creator", currentUserId);
                 editor.apply();
@@ -312,32 +269,38 @@ public class Chatroom extends AppCompatActivity {
     public void checkInvitationStatus() {
         if (dbHelper == null) {
             dbHelper = new RegisterDatabaseHelper(this);
+            Log.w("Chatroom", "dbHelper was null, reinitialized");
         }
         if (currentUserId == null) {
-            currentUserId = sharedPreferences.getString("userId", "1");
-            Log.w("Chatroom", "currentUserId was null, set to: " + currentUserId);
+            currentUserId = sharedPreferences.getString("userId", null);
+            if (currentUserId == null) {
+                Log.e("Chatroom", "currentUserId is null, redirecting to login");
+                runOnUiThread(() -> {
+                    Toast.makeText(Chatroom.this, "請先登錄", Toast.LENGTH_SHORT).show();
+                    startActivity(new Intent(Chatroom.this, PersonalAccount.class));
+                    finish();
+                });
+                return;
+            }
         }
+
         dbHelper.syncInvitations(this, new RegisterDatabaseHelper.SyncCallback() {
             @Override
             public void onSyncComplete(boolean success) {
                 runOnUiThread(() -> {
-                    if (dbHelper == null) {
-                        dbHelper = new RegisterDatabaseHelper(Chatroom.this);
-                    }
+                    Log.d("Chatroom", "Server invitation sync status: " + success);
                     if (!success) {
-                        Toast.makeText(Chatroom.this, "Failed to sync invitations", Toast.LENGTH_SHORT).show();
+                        Log.e("Chatroom", "Failed to sync invitations");
+                        Toast.makeText(Chatroom.this, "無法同步邀請", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    if (currentUserId == null) {
-                        currentUserId = sharedPreferences.getString("userId", "1");
-                        Log.w("Chatroom", "currentUserId was null in onSyncComplete, set to: " + currentUserId);
-                    }
-                    List<Invitation> pendingInvitations = dbHelper.getPendingInvitations(currentUserId);
-                    Log.d("Chatroom", "Pending invitations for " + currentUserId + ": " + (pendingInvitations != null ? pendingInvitations.size() : 0) + ", Details: " + pendingInvitations);
 
-                    // 僅非創建者檢查邀請狀態
+                    List<Invitation> pendingInvitations = dbHelper.getPendingInvitations(currentUserId);
+                    Log.d("Chatroom", "Pending invitations for " + currentUserId + ": " + (pendingInvitations != null ? pendingInvitations.size() : 0));
+
                     if (!isGroupCreator()) {
                         hasAcceptedInvitation = dbHelper.isInvitationAccepted(currentUserId, groupName);
+                        Log.d("Chatroom", "Updated hasAcceptedInvitation: " + hasAcceptedInvitation + " for user " + currentUserId + " in group " + groupName);
                     }
 
                     if (pendingInvitations != null && !pendingInvitations.isEmpty()) {
@@ -348,7 +311,7 @@ public class Chatroom extends AppCompatActivity {
                             }
                         }
                     } else {
-                        Log.w("Chatroom", "No pending invitations found for user " + currentUserId);
+                        Log.d("Chatroom", "No pending invitations found for user " + currentUserId);
                     }
 
                     updateUI();
@@ -368,128 +331,54 @@ public class Chatroom extends AppCompatActivity {
     };
 
     private void showInvitationDialog(Invitation invitation) {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("群組邀請")
-                .setMessage("您已被邀請加入群組: " + invitation.getGroupName())
-                .setPositiveButton("接受", (dialog, which) -> {
-                    dbHelper.updateInvitationStatus(invitation.getInvitationId(), "accepted");
-                    hasAcceptedInvitation = true; // 立即更新邀請狀態
-                    updateUI(); // 立即更新 UI
-                    checkInvitationStatus(); // 重新檢查並同步
-                    dialog.dismiss();
-                })
-                .setNegativeButton("拒絕", (dialog, which) -> {
-                    dbHelper.updateInvitationStatus(invitation.getInvitationId(), "rejected");
-                    checkInvitationStatus();
-                    dialog.dismiss();
-                })
-                .setCancelable(false)
-                .show();
+        runOnUiThread(() -> {
+            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+            builder.setTitle("群組邀請")
+                    .setMessage("您已被邀請加入群組: " + invitation.getGroupName())
+                    .setPositiveButton("接受", (dialog, which) -> {
+                        dbHelper.updateInvitationStatus(invitation.getInvitationId(), "accepted");
+                        hasAcceptedInvitation = true;
+                        updateUI();
+                        checkInvitationStatus();
+                        dialog.dismiss();
+                        Log.d("Chatroom", "Invitation accepted: " + invitation.getInvitationId());
+                    })
+                    .setNegativeButton("拒絕", (dialog, which) -> {
+                        dbHelper.updateInvitationStatus(invitation.getInvitationId(), "rejected");
+                        checkInvitationStatus();
+                        dialog.dismiss();
+                        Log.d("Chatroom", "Invitation rejected: " + invitation.getInvitationId());
+                    })
+                    .setCancelable(false)
+                    .show();
+        });
     }
 
     public void onSendButtonClick(View view) {
+        if (!hasAcceptedInvitation) {
+            Toast.makeText(this, "請先接受群組邀請以發送訊息", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         String message = editTextMessage.getText().toString().trim();
         if (message.isEmpty()) {
-            Toast.makeText(this, "Message cannot be empty", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "訊息不能為空", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (!hasAcceptedInvitation) {
-            Toast.makeText(this, "Please accept the group invitation to send messages", Toast.LENGTH_SHORT).show();
-            return;
-        }
+
         String messageId = dbHelper.generateRandomId();
         long timestamp = System.currentTimeMillis();
-        Log.d("Chatroom", "dbHelper is " + (dbHelper != null ? "not null" : "null"));
-        if (dbHelper != null) {
-            dbHelper.insertMessage(messageId, groupName, currentUsername, message, timestamp);
-            Log.d("Chatroom", "Message insertion attempted, ID: " + messageId);
-            lastMessageId = messageId;
+        dbHelper.insertMessage(messageId, groupName, currentUsername, message, timestamp);
+        Log.d("Chatroom", "Message inserted locally: ID=" + messageId + ", group=" + groupName);
 
-            // 立即更新 UI
-            runOnUiThread(this::loadMessagesFromDatabase);
+        loadMessagesFromDatabase();
+        editTextMessage.setText("");
 
-            if (isNetworkAvailable()) {
-                Log.d("Chatroom", "Network available, initiating upload for ID: " + messageId);
-                executorService.execute(() -> {
-                    OkHttpClient client = new OkHttpClient.Builder()
-                            .connectTimeout(10, TimeUnit.SECONDS)
-                            .readTimeout(10, TimeUnit.SECONDS)
-                            .build();
-                    JSONObject jsonBody = new JSONObject();
-                    try {
-                        jsonBody.put("group_name", groupName != null ? groupName : "");
-                        jsonBody.put("sender", currentUsername != null ? currentUsername : "");
-                        jsonBody.put("message", message != null ? message : "");
-                        jsonBody.put("message_id", messageId != null ? messageId : "");
-                        String jsonString = jsonBody.toString();
-                        Log.d("Chatroom", "Generated JSON: " + jsonString); // 記錄生成的 JSON
-                        RequestBody requestBody = RequestBody.create(jsonString, MediaType.parse("application/json; charset=utf-8"));
-                        Request request = new Request.Builder()
-                                .url(RegisterDatabaseHelper.getServerUrl() + "/send_message.php")
-                                .post(requestBody)
-                                .build();
-
-                        Log.d("Chatroom", "Sending request for ID: " + messageId);
-                        client.newCall(request).enqueue(new Callback() {
-                            @Override
-                            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                                Log.e("Chatroom", "Network failure for ID " + messageId + ": " + e.getMessage(), e);
-                                runOnUiThread(() -> Toast.makeText(Chatroom.this, "網路失敗: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-                            }
-
-                            @Override
-                            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                                if (response != null) {
-                                    int responseCode = response.code();
-                                    String responseData = response.body() != null ? response.body().string() : "No response";
-                                    Log.d("Chatroom", "Received response for ID " + messageId + ": Code=" + responseCode + ", Data=" + responseData);
-                                    if (response.isSuccessful()) {
-                                        try {
-                                            JSONObject jsonResponse = new JSONObject(responseData);
-                                            if (jsonResponse.getBoolean("success")) {
-                                                Log.d("Chatroom", "Message uploaded successfully, ID: " + messageId);
-                                                runOnUiThread(() -> {
-                                                    if (dbHelper != null) {
-                                                        dbHelper.updateMessageSyncStatus(messageId, 1);
-                                                    }
-                                                    editTextMessage.setText("");
-                                                });
-                                            } else {
-                                                String errorMessage = jsonResponse.optString("message", "Unknown server error");
-                                                Log.e("Chatroom", "Server reported failure for ID " + messageId + ": " + errorMessage);
-                                                runOnUiThread(() -> Toast.makeText(Chatroom.this, "伺服器失敗: " + errorMessage, Toast.LENGTH_SHORT).show());
-                                            }
-                                        } catch (JSONException e) {
-                                            Log.e("Chatroom", "JSON Error for ID " + messageId + ": " + e.getMessage(), e);
-                                            runOnUiThread(() -> Toast.makeText(Chatroom.this, "資料解析錯誤", Toast.LENGTH_SHORT).show());
-                                        }
-                                    } else {
-                                        Log.e("Chatroom", "Server error for ID " + messageId + ": " + responseCode + ", Data=" + responseData);
-                                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "伺服器錯誤: " + responseCode, Toast.LENGTH_SHORT).show());
-                                    }
-                                } else {
-                                    Log.e("Chatroom", "No response received for ID " + messageId);
-                                    runOnUiThread(() -> Toast.makeText(Chatroom.this, "無伺服器回應", Toast.LENGTH_SHORT).show());
-                                }
-                                response.close();
-                            }
-                        });
-                    } catch (JSONException e) {
-                        Log.e("Chatroom", "JSON Error preparing request for ID " + messageId + ": " + e.getMessage(), e);
-                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "請求準備錯誤", Toast.LENGTH_SHORT).show());
-                    } catch (Exception e) {
-                        Log.e("Chatroom", "Unexpected error in executor for ID " + messageId + ": " + e.getMessage(), e);
-                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "執行緒錯誤: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-                    }
-                });
-            } else {
-                Log.e("Chatroom", "No network available, upload aborted for ID: " + messageId);
-                runOnUiThread(() -> Toast.makeText(Chatroom.this, "No network connection", Toast.LENGTH_SHORT).show());
-            }
+        if (isNetworkAvailable()) {
+            sendMessageToServer(groupName, currentUsername, message, messageId, timestamp);
         } else {
-            Log.e("Chatroom", "dbHelper is null, cannot insert message");
-            Toast.makeText(this, "Database helper is unavailable", Toast.LENGTH_SHORT).show();
-            return;
+            Log.w("Chatroom", "No network available, message stored locally");
+            Toast.makeText(this, "無網路連線，訊息已儲存至本地", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -497,166 +386,81 @@ public class Chatroom extends AppCompatActivity {
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = cm.getActiveNetworkInfo();
         boolean isAvailable = networkInfo != null && networkInfo.isConnected();
-        Log.d("Chatroom", "Network available: " + isAvailable + ", NetworkInfo: " + (networkInfo != null ? networkInfo.toString() : "null"));
+        Log.d("Chatroom", "Network available: " + isAvailable);
         return isAvailable;
-    }
-
-    private void sendMessageToServerAndWait(String groupName, String sender, String message, String messageId, long timestamp, Runnable onComplete) {
-        class UploadState {
-            private boolean success = false;
-            private int attempt = 0;
-            private final int MAX_RETRIES = 2; // 減少重試次數
-
-            public boolean isSuccess() { return success; }
-            public int getAttempt() { return attempt; }
-            public void setSuccess(boolean value) { success = value; }
-            public void incrementAttempt() { attempt++; }
-        }
-
-        UploadState state = new UploadState();
-
-        while (state.getAttempt() < state.MAX_RETRIES && !state.isSuccess()) {
-            final int currentAttempt = state.getAttempt() + 1;
-            Response response = null;
-            String responseData = "No response body";
-            int responseCode = -1;
-            try {
-                OkHttpClient client = new OkHttpClient.Builder()
-                        .connectTimeout(10, TimeUnit.SECONDS) // 減少超時時間
-                        .readTimeout(10, TimeUnit.SECONDS)
-                        .build();
-                JSONObject jsonBody = new JSONObject();
-                jsonBody.put("group_name", groupName);
-                jsonBody.put("sender", sender);
-                jsonBody.put("message", message);
-                jsonBody.put("message_id", messageId);
-
-                String jsonString = jsonBody.toString();
-                Log.d("Chatroom", "Sending JSON: " + jsonString);
-
-                RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
-                Request request = new Request.Builder()
-                        .url(RegisterDatabaseHelper.getServerUrl() + "/send_message.php")
-                        .post(requestBody)
-                        .build();
-
-                Log.d("Chatroom", "Attempting to send request (attempt " + currentAttempt + ") to: " + RegisterDatabaseHelper.getServerUrl() + "/send_message.php");
-                response = client.newCall(request).execute();
-                if (response != null) {
-                    responseCode = response.code();
-                    responseData = response.body() != null ? response.body().string() : "No response body";
-                    Log.d("Chatroom", "Server response (attempt " + currentAttempt + "): Status=" + responseCode + ", Body=" + responseData);
-                    if (response.isSuccessful()) {
-                        JSONObject jsonResponse = new JSONObject(responseData);
-                        if (jsonResponse.getBoolean("success")) {
-                            Log.d("Chatroom", "Message uploaded successfully to cloud, ID: " + messageId);
-                            if (dbHelper != null) {
-                                dbHelper.updateMessageSyncStatus(messageId, 1);
-                            }
-                            state.setSuccess(true);
-                        } else {
-                            final String errorMessage = jsonResponse.optString("message", "Unknown server error");
-                            Log.e("Chatroom", "Server reported failure (attempt " + currentAttempt + "): " + errorMessage);
-                            runOnUiThread(() -> Toast.makeText(Chatroom.this, "伺服器失敗 (嘗試 " + currentAttempt + "): " + errorMessage, Toast.LENGTH_SHORT).show());
-                        }
-                    } else {
-                        final int finalResponseCode = responseCode;
-                        Log.e("Chatroom", "Server error (attempt " + currentAttempt + "): " + finalResponseCode + ", Body=" + responseData);
-                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "伺服器錯誤 (嘗試 " + currentAttempt + "): " + finalResponseCode, Toast.LENGTH_SHORT).show());
-                    }
-                } else {
-                    Log.e("Chatroom", "No response from server (attempt " + currentAttempt + ")");
-                    runOnUiThread(() -> Toast.makeText(Chatroom.this, "無伺服器回應 (嘗試 " + currentAttempt + ")", Toast.LENGTH_SHORT).show());
-                }
-            } catch (IOException e) {
-                final String errorMsg = e.getMessage();
-                Log.e("Chatroom", "IO Error sending message (attempt " + currentAttempt + "): " + errorMsg + ", StackTrace: " + Log.getStackTraceString(e));
-                runOnUiThread(() -> Toast.makeText(Chatroom.this, "網路錯誤 (嘗試 " + currentAttempt + "): " + errorMsg, Toast.LENGTH_SHORT).show());
-            } catch (JSONException e) {
-                final String errorMsg = e.getMessage();
-                Log.e("Chatroom", "JSON Error (attempt " + currentAttempt + "): " + errorMsg + ", Response: " + responseData, e);
-                runOnUiThread(() -> Toast.makeText(Chatroom.this, "資料解析錯誤 (嘗試 " + currentAttempt + ")", Toast.LENGTH_SHORT).show());
-            } catch (Exception e) {
-                final String errorMsg = e.getMessage();
-                Log.e("Chatroom", "Unexpected error (attempt " + currentAttempt + "): " + errorMsg + ", StackTrace: " + Log.getStackTraceString(e));
-                runOnUiThread(() -> Toast.makeText(Chatroom.this, "意外錯誤 (嘗試 " + currentAttempt + "): " + errorMsg, Toast.LENGTH_SHORT).show());
-            } finally {
-                if (response != null) {
-                    response.close();
-                }
-            }
-
-            if (!state.isSuccess() && state.getAttempt() < state.MAX_RETRIES - 1) {
-                try {
-                    Log.w("Chatroom", "Retrying upload for ID: " + messageId + " (attempt " + (state.getAttempt() + 2) + ")");
-                    Thread.sleep(2000); // 減少重試間隔至 2 秒
-                } catch (InterruptedException e) {
-                    Log.e("Chatroom", "Interrupted during retry: " + e.getMessage());
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-                state.incrementAttempt();
-            }
-        }
-
-        if (state.isSuccess() && dbHelper != null) {
-            runOnUiThread(() -> dbHelper.updateMessageSyncStatus(messageId, 1));
-        }
-        runOnUiThread(onComplete); // 執行回調，例如清空輸入框
     }
 
     private void sendMessageToServer(String groupName, String sender, String message, String messageId, long timestamp) {
         executorService.execute(() -> {
-            OkHttpClient client = new OkHttpClient();
-            JSONObject jsonBody = new JSONObject();
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(10, TimeUnit.SECONDS)
+                    .build();
             try {
+                JSONObject jsonBody = new JSONObject();
                 jsonBody.put("group_name", groupName);
                 jsonBody.put("sender", sender);
                 jsonBody.put("message", message);
                 jsonBody.put("message_id", messageId);
                 jsonBody.put("timestamp", timestamp);
 
-                RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
+                RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json; charset=utf-8"));
                 Request request = new Request.Builder()
                         .url(RegisterDatabaseHelper.getServerUrl() + "/send_message.php")
                         .post(requestBody)
                         .build();
 
-                try (Response response = client.newCall(request).execute()) {
-                    if (response.isSuccessful()) {
+                client.newCall(request).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                        Log.e("Chatroom", "Failed to send message: " + e.getMessage());
+                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "無法發送訊息: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                    }
+
+                    @Override
+                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                         String responseData = response.body() != null ? response.body().string() : "";
-                        JSONObject jsonResponse = new JSONObject(responseData);
-                        if (jsonResponse.has("success") && jsonResponse.getBoolean("success")) {
-                            Log.d("Chatroom", "Message uploaded successfully, ID: " + messageId + ", Response: " + responseData);
-                            if (dbHelper != null) {
-                                dbHelper.updateMessageSyncStatus(messageId, 1); // 標記為已同步
+                        Log.d("Chatroom", "Send message response: " + responseData + ", code: " + response.code());
+                        if (response.isSuccessful()) {
+                            try {
+                                JSONObject jsonResponse = new JSONObject(responseData);
+                                if (jsonResponse.getBoolean("success")) {
+                                    dbHelper.updateMessageSyncStatus(messageId, 1);
+                                    Log.d("Chatroom", "Message synced successfully: ID=" + messageId);
+                                } else {
+                                    String errorMessage = jsonResponse.optString("message", "未知錯誤");
+                                    Log.e("Chatroom", "Server error: " + errorMessage);
+                                    runOnUiThread(() -> Toast.makeText(Chatroom.this, "伺服器錯誤: " + errorMessage, Toast.LENGTH_SHORT).show());
+                                }
+                            } catch (JSONException e) {
+                                Log.e("Chatroom", "JSON parse error: " + e.getMessage());
+                                runOnUiThread(() -> Toast.makeText(Chatroom.this, "無法解析伺服器回應", Toast.LENGTH_SHORT).show());
                             }
                         } else {
-                            String errorMessage = jsonResponse.has("message") ? jsonResponse.getString("message") : "Unknown error";
-                            Log.e("Chatroom", "Server reported failure: " + errorMessage + ", Response: " + responseData);
-                            runOnUiThread(() -> Toast.makeText(Chatroom.this, "Server failed: " + errorMessage, Toast.LENGTH_SHORT).show());
+                            Log.e("Chatroom", "Server error: " + response.code() + ", response: " + responseData);
+                            runOnUiThread(() -> Toast.makeText(Chatroom.this, "伺服器錯誤: " + response.code(), Toast.LENGTH_SHORT).show());
                         }
-                    } else {
-                        Log.e("Chatroom", "Server error: " + response.code() + ", Response: " + response.body().string());
-                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "Server error: " + response.code(), Toast.LENGTH_SHORT).show());
+                        response.close();
                     }
-                }
-            } catch (Exception e) {
-                Log.e("Chatroom", "Error sending message: " + e.getMessage());
-                runOnUiThread(() -> Toast.makeText(Chatroom.this, "Error sending message: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                });
+            } catch (JSONException e) {
+                Log.e("Chatroom", "JSON error: " + e.getMessage());
+                runOnUiThread(() -> Toast.makeText(Chatroom.this, "無法準備訊息", Toast.LENGTH_SHORT).show());
             }
         });
     }
 
     private void updateMessageList(String message) {
-        if (messageList != null && messageAdapter != null && messageRecyclerView != null) {
-            messageList.add(message);
-            messageAdapter.notifyItemInserted(messageList.size() - 1);
-            messageRecyclerView.scrollToPosition(messageList.size() - 1);
-            Log.d("Chatroom", "Message added to UI: " + message);
-        } else {
-            Log.e("Chatroom", "UI components are null, cannot update");
-        }
+        runOnUiThread(() -> {
+            if (messageList != null && messageAdapter != null && messageRecyclerView != null) {
+                messageList.add(message);
+                messageAdapter.notifyItemInserted(messageList.size() - 1);
+                messageRecyclerView.scrollToPosition(messageList.size() - 1);
+                Log.d("Chatroom", "Message added to UI: " + message);
+            } else {
+                Log.e("Chatroom", "UI components are null, cannot update message list");
+            }
+        });
     }
 
     private void startMessagePolling() {
@@ -666,62 +470,124 @@ public class Chatroom extends AppCompatActivity {
                     .readTimeout(15, TimeUnit.SECONDS)
                     .build();
             while (isPollingActive) {
-                Request request = new Request.Builder()
-                        .url(RegisterDatabaseHelper.getServerUrl() + "/fetch_messages.php?group_name=" + Uri.encode(groupName) + "&last_message_id=" + lastMessageId)
-                        .build();
+                try {
+                    Log.d("Chatroom", "Polling for group: " + groupName + ", lastMessageId: " + lastMessageId + ", userId: " + currentUserId);
+                    Request request = new Request.Builder()
+                            .url(RegisterDatabaseHelper.getServerUrl() + "/fetch_messages.php?group_name=" + Uri.encode(groupName) + "&last_message_id=" + Uri.encode(lastMessageId))
+                            .build();
 
-                try (Response response = client.newCall(request).execute()) {
-                    if (response.isSuccessful()) {
+                    try (Response response = client.newCall(request).execute()) {
                         String responseData = response.body() != null ? response.body().string() : "";
-                        try {
-                            JSONObject jsonResponse = new JSONObject(responseData);
-                            if (jsonResponse.getBoolean("success")) {
-                                JSONArray data = jsonResponse.getJSONArray("data");
-                                if (data.length() > 0) {
-                                    for (int i = 0; i < data.length(); i++) {
-                                        JSONObject messageObj = data.getJSONObject(i);
-                                        String messageId = messageObj.getString("message_id");
-                                        String sender = messageObj.has("sender") ? messageObj.getString("sender") : "Unknown";
-                                        String messageText = messageObj.has("message") ? messageObj.getString("message") : "";
-                                        long timestamp = messageObj.has("timestamp") ? messageObj.getLong("timestamp") : System.currentTimeMillis();
+                        Log.d("Chatroom", "Polling response code: " + response.code() + ", response: " + responseData);
+                        if (response.isSuccessful()) {
+                            pollingRetryCount = 0;
+                            try {
+                                JSONObject jsonResponse = new JSONObject(responseData);
+                                if (jsonResponse.getBoolean("success")) {
+                                    JSONArray data = jsonResponse.getJSONArray("data");
+                                    Log.d("Chatroom", "Received " + data.length() + " messages for group: " + groupName);
+                                    if (data.length() > 0) {
+                                        for (int i = 0; i < data.length(); i++) {
+                                            JSONObject messageObj = data.getJSONObject(i);
+                                            String messageId = messageObj.getString("message_id");
+                                            String sender = messageObj.optString("sender", "未知用戶");
+                                            String messageText = messageObj.optString("message", "");
+                                            long timestamp = messageObj.optLong("timestamp", System.currentTimeMillis());
 
-                                        // 假設需要從 UTC 轉為本地時間（如果伺服器返回 UTC）
-                                        timestamp = timestamp + TimeZone.getDefault().getOffset(timestamp);
+                                            timestamp = timestamp + TimeZone.getDefault().getOffset(timestamp);
 
-                                        if (!messageId.equals(lastMessageId)) {
-                                            if (dbHelper != null) {
+                                            if (!dbHelper.isMessageExists(messageId)) {
                                                 dbHelper.insertMessage(messageId, groupName, sender, messageText, timestamp);
+                                                Log.d("Chatroom", "Inserted new message: ID=" + messageId + ", content=" + messageText);
+                                                lastMessageId = messageId; // 更新 lastMessageId
                                             }
-                                            lastMessageId = messageId; // 更新到最新 messageId
                                         }
+                                        runOnUiThread(this::loadMessagesFromDatabase);
+                                    } else {
+                                        Log.d("Chatroom", "No new messages received for group: " + groupName);
                                     }
+                                    // 更新 lastMessageId 為伺服器返回的最後一個 message_id
+                                    String newLastMessageId = jsonResponse.optString("last_message_id", lastMessageId);
+                                    if (!newLastMessageId.equals(lastMessageId)) {
+                                        lastMessageId = newLastMessageId;
+                                        Log.d("Chatroom", "Updated lastMessageId to: " + lastMessageId);
+                                    }
+                                } else {
+                                    String errorMessage = jsonResponse.optString("message", "未知錯誤");
+                                    Log.w("Chatroom", "Polling response not successful: " + errorMessage);
+                                    runOnUiThread(() -> Toast.makeText(Chatroom.this, "拉取訊息失敗: " + errorMessage, Toast.LENGTH_SHORT).show());
                                 }
-                            } else {
-                                Log.w("Chatroom", "Polling response not successful: " + responseData);
+                            } catch (JSONException e) {
+                                Log.e("Chatroom", "JSON parse error: " + e.getMessage());
+                                runOnUiThread(() -> Toast.makeText(Chatroom.this, "無法解析伺服器回應: " + e.getMessage(), Toast.LENGTH_SHORT).show());
                             }
-                        } catch (JSONException e) {
-                            Log.e("Chatroom", "JSON parse error: " + e.getMessage() + ", Response: " + responseData);
+                        } else {
+                            Log.e("Chatroom", "Polling failed with code: " + response.code() + ", response: " + responseData);
+                            pollingRetryCount++;
+                            if (pollingRetryCount >= MAX_POLLING_RETRIES) {
+                                Log.w("Chatroom", "Max retries reached, resetting lastMessageId to 0");
+                                lastMessageId = "0";
+                                pollingRetryCount = 0;
+                                runOnUiThread(() -> Toast.makeText(Chatroom.this, "伺服器錯誤，重試拉取全部訊息", Toast.LENGTH_SHORT).show());
+                            }
+                            Thread.sleep(POLLING_INTERVAL_RETRY_MS);
+                            continue;
                         }
-                    } else {
-                        Log.e("Chatroom", "Polling failed with code: " + response.code());
                     }
-                } catch (IOException e) {
-                    Log.e("Chatroom", "IO error: " + e.getMessage());
+                } catch (IOException | InterruptedException e) {
+                    Log.e("Chatroom", "Polling error: " + e.getMessage());
+                    pollingRetryCount++;
+                    if (pollingRetryCount >= MAX_POLLING_RETRIES) {
+                        Log.w("Chatroom", "Max retries reached due to error, resetting lastMessageId to 0");
+                        lastMessageId = "0";
+                        pollingRetryCount = 0;
+                        runOnUiThread(() -> Toast.makeText(Chatroom.this, "網路錯誤，重試拉取全部訊息", Toast.LENGTH_SHORT).show());
+                    }
+                    try {
+                        Thread.sleep(POLLING_INTERVAL_RETRY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    continue;
                 }
 
                 try {
-                    Thread.sleep(500); // 減少到 500 毫秒 =>延遲大概5分鐘
+                    Thread.sleep(POLLING_INTERVAL_MS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                    break;
                 }
             }
         });
     }
 
+    private void refreshMessages() {
+        lastMessageId = "0";
+        pollingRetryCount = 0;
+        loadMessagesFromDatabase();
+        Log.d("Chatroom", "Manual refresh triggered, lastMessageId reset to 0");
+        Toast.makeText(this, "正在重新載入訊息", Toast.LENGTH_SHORT).show();
+    }
+
     private String formatTimestamp(long timestamp) {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        sdf.setTimeZone(TimeZone.getDefault()); // 使用手機當地時區
+        sdf.setTimeZone(TimeZone.getDefault());
         return sdf.format(new Date(timestamp));
+    }
+
+    private void debugLocalMessages() {
+        SQLiteDatabase db = dbHelper.getRegisterDatabase();
+        Cursor cursor = db.query(RegisterDatabaseHelper.TABLE_MESSAGES,
+                null, "group_name=?", new String[]{groupName}, null, null, null);
+        while (cursor.moveToNext()) {
+            String messageId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE_ID));
+            String sender = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_SENDER));
+            String message = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE));
+            long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_TIMESTAMP));
+            Log.d("Debug", "Local message: ID=" + messageId + ", sender=" + sender + ", content=" + message + ", timestamp=" + timestamp);
+        }
+        cursor.close();
     }
 
     private void loadMessagesFromDatabase() {
@@ -745,13 +611,17 @@ public class Chatroom extends AppCompatActivity {
         List<String> newMessages = new ArrayList<>();
         if (cursor.moveToFirst()) {
             do {
+                String messageId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE_ID));
                 String sender = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_SENDER));
                 String message = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE));
                 long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_TIMESTAMP));
                 String fullMessage = sender + ": " + message + " (" + formatTimestamp(timestamp) + ")";
                 newMessages.add(fullMessage);
-                lastMessageId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_MESSAGE_ID));
+                lastMessageId = messageId; // 更新 lastMessageId
+                Log.d("Chatroom", "Loaded message: ID=" + messageId + ", sender=" + sender + ", content=" + message);
             } while (cursor.moveToNext());
+        } else {
+            Log.d("Chatroom", "No messages found for group: " + groupName);
         }
         cursor.close();
 
@@ -761,100 +631,152 @@ public class Chatroom extends AppCompatActivity {
                 messageList.addAll(newMessages);
                 messageAdapter.notifyDataSetChanged();
                 messageRecyclerView.scrollToPosition(messageList.size() - 1);
-                Log.w("Cdhatroom", "UI updated with " + messageList.size() + " messages, lastMessageId: " + lastMessageId);
-            }
-        });
-    }
-
-    public void onInvitationAccepted(String invitationId) {
-        if (dbHelper == null) {
-            Log.e("Chatroom", "dbHelper is null, cannot process invitation");
-            return;
-        }
-        dbHelper.updateInvitationStatus(invitationId, "accepted");
-        checkInvitationStatus();
-
-        runOnUiThread(() -> {
-            String groupName = getGroupNameFromInvitation(invitationId);
-            if (groupName != null) {
-                String membersString = sharedPreferences.getString(groupName + "_members", "");
-                members = new ArrayList<>();
-                if (!membersString.isEmpty()) {
-                    String[] membersArray = membersString.split(",");
-                    for (String member : membersArray) {
-                        String cleanMember = member.trim();
-                        String userId = cleanMember.contains("(") ? cleanMember.substring(cleanMember.indexOf("(") + 1, cleanMember.indexOf(")")) : dbHelper.getUserIdFromUsername(cleanMember);
-                        if (userId != null) members.add(userId);
-                    }
-                }
-                textViewMembers.setText("Members: " + String.join(", ", members)); // 更新成員列表
+                Log.d("Chatroom", "UI updated with " + messageList.size() + " messages, lastMessageId: " + lastMessageId);
             } else {
-                Log.e("Chatroom", "Failed to get group name for invitation ID: " + invitationId);
-                Toast.makeText(Chatroom.this, "無法找到群組", Toast.LENGTH_SHORT).show();
+                Log.d("Chatroom", "No UI update needed, message list unchanged");
             }
         });
-    }
-
-    private String getGroupNameFromInvitation(String invitationId) {
-        if (dbHelper == null) {
-            Log.e("Chatroom", "dbHelper is null, cannot query group name");
-            return null;
-        }
-        SQLiteDatabase db = dbHelper.getRegisterDatabase();
-        Cursor cursor = db.query(RegisterDatabaseHelper.TABLE_INVITATIONS,
-                new String[]{RegisterDatabaseHelper.COL_GROUP_NAME},
-                RegisterDatabaseHelper.COL_INVITATION_ID + " = ?",
-                new String[]{invitationId},
-                null, null, null);
-        String groupName = null;
-        if (cursor.moveToFirst()) {
-            groupName = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_GROUP_NAME));
-        }
-        cursor.close();
-        return groupName;
     }
 
     private void updateUI() {
-        /*
-        if (hasAcceptedInvitation) {
-            buttonSend.setEnabled(true);
-            editTextMessage.setEnabled(true);
-            editTextMessage.setHint("輸入訊息...");
-        } else {
-            buttonSend.setEnabled(false);
-            editTextMessage.setEnabled(false);
-            editTextMessage.setHint("請先接受群組邀請才能發送訊息");
-        }
-        Log.d("Chatroom", "UI updated, hasAcceptedInvitation: " + hasAcceptedInvitation);
-        */
-        // 直接啟用訊息輸入
-        editTextMessage.setEnabled(true);
-        editTextMessage.setHint("輸入訊息...");
-        buttonSend.setEnabled(true); // 確保發送按鈕可用
+        runOnUiThread(() -> {
+            if (hasAcceptedInvitation) {
+                buttonSend.setEnabled(true);
+                editTextMessage.setEnabled(true);
+                editTextMessage.setHint("輸入訊息...");
+            } else {
+                buttonSend.setEnabled(false);
+                editTextMessage.setEnabled(false);
+                editTextMessage.setHint("請先接受群組邀請才能發送訊息");
+            }
+            Log.d("Chatroom", "UI updated, hasAcceptedInvitation: " + hasAcceptedInvitation);
+        });
+    }
 
+    private void updateNavigationMenu() {
+        runOnUiThread(() -> {
+            if (navigationView == null) {
+                Log.e("Chatroom", "navigationView is null");
+                return;
+            }
+
+            Menu menu = navigationView.getMenu();
+            menu.clear();
+
+            menu.add(Menu.NONE, R.id.Chat_room, Menu.NONE, "主頁")
+                    .setIcon(R.drawable.store_icon)
+                    .setOnMenuItemClickListener(item -> {
+                        startActivity(new Intent(Chatroom.this, MainActivity.class));
+                        drawerLayout.closeDrawer(GravityCompat.START);
+                        return true;
+                    });
+
+            menu.add(Menu.NONE, R.id.Create_Group, Menu.NONE, "創建群組")
+                    .setIcon(R.drawable.store_icon)
+                    .setOnMenuItemClickListener(item -> {
+                        startActivity(new Intent(Chatroom.this, CreateGroupActivity.class));
+                        drawerLayout.closeDrawer(GravityCompat.START);
+                        return true;
+                    });
+
+            Set<String> groupNames = new HashSet<>();
+            SQLiteDatabase db = dbHelper.getRegisterDatabase();
+            Cursor cursor = db.query(TABLE_INVITATIONS,
+                    new String[]{COL_GROUP_NAME},
+                    COL_INVITED_USER + "=? AND " + COL_STATUS + "=?",
+                    new String[]{currentUserId, "accepted"},
+                    null, null, null);
+            while (cursor.moveToNext()) {
+                String group = cursor.getString(cursor.getColumnIndexOrThrow(COL_GROUP_NAME));
+                groupNames.add(group);
+            }
+            cursor.close();
+
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putStringSet("groupNames", groupNames);
+            editor.apply();
+
+            for (String group : groupNames) {
+                menu.add(Menu.NONE, Menu.NONE, Menu.NONE, group)
+                        .setIcon(R.drawable.ic_go)
+                        .setOnMenuItemClickListener(item -> {
+                            String selectedGroupName = item.getTitle().toString();
+                            Intent intent = new Intent(Chatroom.this, Chatroom.class);
+                            intent.putExtra("groupName", selectedGroupName);
+                            intent.putStringArrayListExtra("members", new ArrayList<>(members));
+                            startActivity(intent);
+                            drawerLayout.closeDrawer(GravityCompat.START);
+                            return true;
+                        });
+            }
+
+            menu.add(Menu.NONE, R.id.nav_logout, Menu.NONE, "登出")
+                    .setIcon(R.drawable.login_icon)
+                    .setOnMenuItemClickListener(item -> {
+                        SharedPreferences.Editor editor1 = sharedPreferences.edit();
+                        editor1.putBoolean("isLoggedIn", false);
+                        editor1.putString("loggedInUser", "訪客");
+                        editor1.putString("userId", null);
+                        editor1.apply();
+                        Toast.makeText(Chatroom.this, "已登出", Toast.LENGTH_SHORT).show();
+                        startActivity(new Intent(Chatroom.this, PersonalAccount.class));
+                        finish();
+                        return true;
+                    });
+
+            Log.d("Chatroom", "Navigation menu updated with groups: " + groupNames);
+        });
+    }
+
+    private boolean handleNavigationItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.nav_logout) {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putBoolean("isLoggedIn", false);
+            editor.putString("loggedInUser", "訪客");
+            editor.putString("userId", null);
+            editor.apply();
+            Toast.makeText(this, "已登出", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(this, PersonalAccount.class));
+            finish();
+        } else if (id == R.id.Chat_room) {
+            startActivity(new Intent(this, MainActivity.class));
+        } else if (id == R.id.Create_Group) {
+            startActivity(new Intent(this, CreateGroupActivity.class));
+        } else {
+            String selectedGroupName = item.getTitle().toString();
+            Intent intent = new Intent(this, Chatroom.class);
+            intent.putExtra("groupName", selectedGroupName);
+            intent.putStringArrayListExtra("members", new ArrayList<>(members));
+            startActivity(intent);
+        }
+        drawerLayout.closeDrawer(GravityCompat.START);
+        return true;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (dbHelper == null) {
-            dbHelper = new RegisterDatabaseHelper(this);
-        }
-        updateNavigationMenu();
-        checkInvitationStatus();
         isPollingActive = true;
         registerReceiver(invitationReceiver, new IntentFilter("com.example.cameraproject_2.INVITATION_UPDATED"), Context.RECEIVER_NOT_EXPORTED);
+        checkInvitationStatus();
         loadMessagesFromDatabase();
+        debugLocalMessages();
         startMessagePolling();
-
-        dbHelper.checkInvitationStatus(currentUserId); // currentUserId 為 XDGXC 或 1
+        if (isNetworkAvailable()) {
+            dbHelper.syncPendingMessages(this);
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         isPollingActive = false;
-        unregisterReceiver(invitationReceiver);
+        try {
+            unregisterReceiver(invitationReceiver);
+        } catch (IllegalArgumentException e) {
+            Log.w("Chatroom", "Receiver not registered: " + e.getMessage());
+        }
     }
 
     @Override
@@ -868,7 +790,6 @@ public class Chatroom extends AppCompatActivity {
             dbHelper.setOnMessageInsertedListener(null);
             dbHelper.closeDatabase();
         }
-        // 不將 dbHelper 設置為 null，讓下次初始化處理
     }
 
     @Override
@@ -877,106 +798,5 @@ public class Chatroom extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    private void setupDrawer() {
-        // 實現抽屜菜單的設置邏輯（目前留空）
-    }
-
-    private boolean handleNavigationItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        Intent navigationIntent = null;
-
-        if (id == R.id.nav_logout) {
-            SharedPreferences.Editor editor = sharedPreferences.edit();
-            editor.putBoolean("isLoggedIn", false);
-            editor.putString("loggedInUser", "訪客");
-            editor.putString("userId", "訪客");
-            editor.apply();
-            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
-            navigationIntent = new Intent(Chatroom.this, PersonalAccount.class);
-            startActivity(navigationIntent);
-            finish();
-        } else if (id == R.id.Chat_room) {
-            navigationIntent = new Intent(Chatroom.this, MainActivity.class);
-            startActivity(navigationIntent);
-        } else if (id == R.id.Create_Group) {
-            navigationIntent = new Intent(Chatroom.this, CreateGroupActivity.class);
-            startActivity(navigationIntent);
-        } else {
-            String selectedGroupName = item.getTitle().toString();
-            Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
-            if (groupNames.contains(selectedGroupName)) {
-                String membersString = sharedPreferences.getString(selectedGroupName + "_members", "");
-                List<String> membersList = new ArrayList<>();
-                if (!membersString.isEmpty()) {
-                    String[] membersArray = membersString.split(",");
-                    for (String member : membersArray) {
-                        membersList.add(member.trim());
-                    }
-                }
-                navigationIntent = new Intent(Chatroom.this, Chatroom.class);
-                navigationIntent.putExtra("groupName", selectedGroupName);
-                navigationIntent.putStringArrayListExtra("members", new ArrayList<>(membersList));
-                startActivity(navigationIntent);
-            }
-        }
-
-        if (drawerLayout != null) {
-            drawerLayout.closeDrawer(GravityCompat.START);
-        }
-        return true;
-    }
-
-    private void updateNavigationMenu() {
-        if (navigationView == null) return;
-
-        Menu menu = navigationView.getMenu();
-        menu.clear();
-
-        menu.add("Chat Room").setIcon(R.drawable.chat_icon).setOnMenuItemClickListener(item -> {
-            startActivity(new Intent(Chatroom.this, MainActivity.class));
-            drawerLayout.closeDrawer(GravityCompat.START);
-            return true;
-        });
-        menu.add("Create Group").setIcon(R.drawable.chat_add_icon).setOnMenuItemClickListener(item -> {
-            startActivity(new Intent(Chatroom.this, CreateGroupActivity.class));
-            drawerLayout.closeDrawer(GravityCompat.START);
-            return true;
-        });
-        menu.add("Logout").setIcon(R.drawable.login_icon).setOnMenuItemClickListener(item -> {
-            SharedPreferences.Editor editor = sharedPreferences.edit();
-            editor.putBoolean("isLoggedIn", false);
-            editor.putString("loggedInUser", "訪客");
-            editor.putString("userId", "訪客");
-            editor.apply();
-            Toast.makeText(this, "Logged out", Toast.LENGTH_SHORT).show();
-            startActivity(new Intent(Chatroom.this, PersonalAccount.class));
-            finish();
-            return true;
-        });
-
-        Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
-        if (groupNames != null) {
-            for (String groupName : groupNames) {
-                menu.add(groupName).setIcon(R.drawable.ic_go).setOnMenuItemClickListener(item -> {
-                    String membersString = sharedPreferences.getString(groupName + "_members", "");
-                    List<String> membersList = new ArrayList<>();
-                    if (!membersString.isEmpty()) {
-                        String[] membersArray = membersString.split(",");
-                        for (String member : membersArray) {
-                            membersList.add(member.trim());
-                        }
-                    }
-                    Intent intent = new Intent(Chatroom.this, Chatroom.class);
-                    intent.putExtra("groupName", groupName);
-                    intent.putStringArrayListExtra("members", new ArrayList<>(membersList));
-                    startActivity(intent);
-                    drawerLayout.closeDrawer(GravityCompat.START);
-                    return true;
-                });
-            }
-        }
-        Log.d("Chatroom", "Navigation menu updated with groups: " + groupNames);
     }
 }
