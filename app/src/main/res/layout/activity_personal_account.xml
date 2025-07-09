@@ -13,6 +13,16 @@
         android:layout_height="match_parent"
         android:background="@color/my_primary_translucent">
 
+        <!-- 返回箭頭 -->
+        <ImageView
+            android:id="@+id/backArrow"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="5dp"
+            android:layout_marginTop="10dp"
+            android:src="@drawable/ic_back_arrow"
+            android:contentDescription="Back" />
+
         <!-- LOGO 區塊 -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
@@ -129,7 +139,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:text="登入"
-                android:backgroundTint="@color/my_primary"
+                android:textColor="#000000"
+                android:backgroundTint="@color/color_change_blue"
                 app:cornerRadius="32dp"
                 android:layout_marginBottom="10dp" />
 
@@ -138,8 +149,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:text="註冊"
-                android:backgroundTint="@color/my_third"
-                android:textColor="@color/my_forth"
+                android:backgroundTint="@color/color_change_yello"
+                android:textColor="#000000"
                 app:cornerRadius="32dp" />
 
             <View

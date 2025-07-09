@@ -7,8 +7,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -26,6 +28,7 @@ public class PersonalAccount extends AppCompatActivity {
     private EditText editTextPassword;
     private Button buttonLogin;
     private Button buttonRegister;
+    private ImageView backArrow; // 添加返回箭頭的 ImageView 變量
     private RegisterDatabaseHelper dbHelper;
     private SharedPreferences sharedPreferences;
     private List<AlertDialog> invitationDialogs = new ArrayList<>();
@@ -45,10 +48,12 @@ public class PersonalAccount extends AppCompatActivity {
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
         dbHelper = new RegisterDatabaseHelper(this);
 
+        // 初始化 UI 組件
         editTextUsername = findViewById(R.id.editTextUsername);
         editTextPassword = findViewById(R.id.editTextPassword);
         buttonLogin = findViewById(R.id.buttonLogin);
         buttonRegister = findViewById(R.id.buttonRegister);
+        backArrow = findViewById(R.id.backArrow); // 初始化返回箭頭
 
         SharedPreferences.Editor editor = sharedPreferences.edit();
         if (!sharedPreferences.getBoolean("isLoggedIn", false)) {
@@ -57,6 +62,14 @@ public class PersonalAccount extends AppCompatActivity {
             editor.putString("profileImageUrl", null);
             editor.apply();
         }
+
+        // 設置返回箭頭的點擊事件
+        backArrow.setOnClickListener(v -> {
+            Intent intent = new Intent(PersonalAccount.this, MainActivity.class);
+            startActivity(intent);
+            overridePendingTransition(R.anim.enter_from_left, R.anim.exit_to_right); // 可選：添加動畫
+            finish(); // 結束當前活動
+        });
 
         buttonLogin.setOnClickListener(v -> {
             String username = editTextUsername.getText().toString().trim();
@@ -175,6 +188,7 @@ public class PersonalAccount extends AppCompatActivity {
             });
         });
     }
+
     private void checkGroupInvitations(String username, String password) {
         String userId = dbHelper.getUserId(username, password);
         Log.d("PersonalAccount", "Checking invitations for userId: " + userId);
