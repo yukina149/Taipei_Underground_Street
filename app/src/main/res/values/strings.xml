@@ -18,7 +18,7 @@
     <string name="guest">訪客</string>
 
     <string name="language_setting">語言設定</string>
-    <string name="user_guide">使用說明</string>
+    <string name="user_guide">觀看使用說明</string>
     <string name="delete_account">刪除帳號</string>
     <string name="language_english">英文</string>
     <string name="language_japanese">日文</string>
@@ -67,7 +67,7 @@
     <string name="navigation_home">首頁</string>
     <string name="navigation_chat">聊天室</string>
     <string name="navigation_member">會員資訊</string>
-    <string name="navigation_info">北車地下街資訊</string>
+    <string name="navigation_info">北車資訊</string>
     <string name="navigation_settings">設定</string>
 
     <string name="profile_image">頭像</string>
@@ -78,5 +78,10 @@
     <string name="switch_account">登入其他帳號</string>
     <string name="login">登入</string>
 
+
+    <string name="guide_next">下一步</string>
+    <string name="guide_finish">完成</string>
+    <string name="do_not_show_again">不再顯示</string>
+    <string name="guide_image_description">使用說明圖片</string>
 
 </resources>

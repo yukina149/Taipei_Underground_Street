@@ -34,6 +34,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -67,7 +68,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
 
     private static final int REQUEST_CAMERA_PERMISSION_CODE = 1;
     private static final int REQUEST_NOTIFICATION_PERMISSION_CODE = 1002;
-    private static final String INVITATION_CHECK_URL = "http://3.107.23.176/android_studio/fetch_invitations.php";
+    private static final String INVITATION_CHECK_URL = "http://13.239.97.6/android_studio/fetch_invitations.php";
     private static final String USER_ID_KEY = "userId";
     private static final String LOGGED_IN_USER_KEY = "loggedInUser";
     private static final long CHECK_INTERVAL = 30000;
@@ -146,7 +147,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 } else {
                     Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
                     if (groupNames == null || groupNames.isEmpty()) {
-                        Intent intent = new Intent(MainActivity.this, CreateGroupActivity.class);
+                        Intent intent = new Intent(MainActivity.this, chatroom_main.class);
                         startActivity(intent);
                     } else {
                         String defaultGroup = groupNames.iterator().next(); // 取第一個群組
@@ -158,7 +159,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                                 members.add(member.trim());
                             }
                         }
-                        Intent intent = new Intent(MainActivity.this, Chatroom.class);
+                        Intent intent = new Intent(MainActivity.this, chatroom_main.class);
                         intent.putExtra("groupName", defaultGroup);
                         intent.putStringArrayListExtra("members", new ArrayList<>(members));
                         startActivity(intent);
@@ -244,12 +245,13 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         startInvitationChecking();
         requestNotificationPermission();
 
-        buttonUpload.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, UploadImage.class);
-            startActivity(intent);
-        });
-
         setupSpinner();
+
+        // 處理按鈕點擊事件
+        buttonUpload.setOnClickListener(v -> {
+            // 模擬點擊後顯示下拉選單
+            imageSourceSpinner.performClick();
+        });
     }
 
     @Override
@@ -304,7 +306,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
         }
     }
 
-    // 保留此方法，供處理群組邀請接受後的跳轉，可能由廣播或其他事件觸發
     public void onInvitationAccepted(String invitationId) {
         registerDbHelper.updateInvitationStatus(invitationId, "accepted");
         registerDbHelper.syncInvitations(this, new RegisterDatabaseHelper.SyncCallback() {
@@ -317,7 +318,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                             SharedPreferences sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
                             boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
                             if (isLoggedIn) {
-                                // 已登入，跳轉到 UserProfileActivity
                                 Intent intent = new Intent(MainActivity.this, UserProfileActivity.class);
                                 intent.putExtra("isLoggedIn", true);
                                 intent.putExtra("loggedInUser", sharedPreferences.getString("loggedInUser", "未知用戶"));
@@ -325,7 +325,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                                 startActivity(intent);
                                 overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
                             } else {
-                                // 未登入，跳轉到 PersonalAccount
                                 Intent intent = new Intent(MainActivity.this, PersonalAccount.class);
                                 startActivity(intent);
                                 overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
@@ -555,7 +554,6 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 .setTitle(R.string.group_invitation_title)
                 .setMessage(getString(R.string.group_invitation_message, groupName))
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    // 調用 onInvitationAccepted 處理接受邀請邏輯
                     onInvitationAccepted(invitationId);
                     Toast.makeText(this, getString(R.string.accept_invitation_success, groupName), Toast.LENGTH_SHORT).show();
                     dialog.dismiss();
@@ -669,11 +667,70 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private void setupSpinner() {
         List<String> options = new ArrayList<>();
         options.add("請選擇圖片來源");
-        options.add("從相機拍攝");
-        options.add("從圖庫選擇");
+        options.add("從相機");
+        options.add("從圖庫");
 
-        CustomSpinnerAdapter adapter = new CustomSpinnerAdapter(this, android.R.layout.simple_spinner_item, options);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        // 創建自定義適配器
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, R.layout.spinner_item_with_icons, R.id.spinner_text, options) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                TextView textView = view.findViewById(R.id.spinner_text);
+                ImageView icon1 = view.findViewById(R.id.icon1);
+                ImageView icon2 = view.findViewById(R.id.icon2);
+
+                textView.setGravity(Gravity.LEFT);
+                textView.setTextSize(20);
+                textView.setTextColor(Color.BLACK);
+                textView.setTypeface(null, Typeface.BOLD);
+                if (position == 0) textView.setText("上傳");
+
+                // 設置選中項的圖標
+                icon1.setVisibility(View.GONE);
+                icon2.setVisibility(View.GONE);
+                if (position == 0) {
+                    icon1.setImageResource(R.drawable.ic_camera);
+                    icon2.setImageResource(R.drawable.ic_picture);
+                    icon1.setVisibility(View.VISIBLE);
+                    icon2.setVisibility(View.VISIBLE);
+                } else if (position == 1) {
+                    icon1.setImageResource(R.drawable.ic_camera);
+                    icon1.setVisibility(View.VISIBLE);
+                } else if (position == 2) {
+                    icon1.setImageResource(R.drawable.ic_picture);
+                    icon1.setVisibility(View.VISIBLE);
+                }
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                TextView textView = view.findViewById(R.id.spinner_text);
+                ImageView icon1 = view.findViewById(R.id.icon1);
+                ImageView icon2 = view.findViewById(R.id.icon2);
+
+                textView.setGravity(Gravity.CENTER);
+                textView.setTextSize(20);
+                textView.setTextColor(Color.BLACK);
+                textView.setTypeface(null, Typeface.BOLD);
+
+                // 設置下拉項的圖標
+                icon1.setVisibility(View.GONE);
+                icon2.setVisibility(View.GONE);
+                if (position == 1) {
+                    icon1.setImageResource(R.drawable.ic_camera);
+                    icon1.setVisibility(View.VISIBLE);
+                } else if (position == 2) {
+                    icon1.setImageResource(R.drawable.ic_picture);
+                    icon1.setVisibility(View.VISIBLE);
+                }
+                return view;
+            }
+        };
+
+        // 設置下拉視圖資源
+        adapter.setDropDownViewResource(R.layout.spinner_item_with_icons);
         imageSourceSpinner.setAdapter(adapter);
 
         imageSourceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -682,46 +739,17 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 String selectedOption = options.get(position);
                 if (position == 0) {
                     return;
-                } else if (selectedOption.equals("從相機拍攝")) {
+                } else if (selectedOption.equals("從相機")) {
                     captureImage();
-                } else if (selectedOption.equals("從圖庫選擇")) {
+                } else if (selectedOption.equals("從圖庫")) {
                     openGallery();
                 }
-                imageSourceSpinner.setSelection(0);
+                imageSourceSpinner.setSelection(0); // 選擇後恢復到默認項
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
             }
         });
-    }
-
-    public class CustomSpinnerAdapter extends ArrayAdapter<String> {
-        public CustomSpinnerAdapter(Context context, int resource, List<String> objects) {
-            super(context, resource, objects);
-        }
-
-        @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-            View view = super.getView(position, convertView, parent);
-            TextView textView = (TextView) view;
-            textView.setGravity(Gravity.RIGHT);
-            textView.setTextSize(20);
-            textView.setTextColor(Color.BLACK);
-            textView.setTypeface(null, Typeface.BOLD);
-            if (position == 0) textView.setText("上傳圖片");
-            return view;
-        }
-
-        @Override
-        public View getDropDownView(int position, View convertView, ViewGroup parent) {
-            View view = super.getDropDownView(position, convertView, parent);
-            TextView textView = (TextView) view;
-            textView.setGravity(Gravity.CENTER);
-            textView.setTextSize(20);
-            textView.setTextColor(Color.BLACK);
-            textView.setTypeface(null, Typeface.BOLD);
-            return view;
-        }
     }
 }

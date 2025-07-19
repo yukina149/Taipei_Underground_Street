@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="16dp">
+
+    <!-- 創建群組者的頭貼 -->
+    <ImageView
+        android:id="@+id/group_creator_avatar"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:contentDescription="群組創建者頭貼"
+        android:src="@drawable/icon_logo"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- 群組名稱 -->
+
+    <!-- 群組訊息 -->
+    <TextView
+        android:id="@+id/group_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="群組名稱"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="群組名稱"
+        android:textColor="#000000"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toStartOf="@id/last_message_time"
+        app:layout_constraintHorizontal_bias="0.004"
+        app:layout_constraintStart_toEndOf="@id/group_creator_avatar"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/group_message"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="8dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="最新訊息內容"
+        android:textColor="#888888"
+        android:textSize="14sp"
+        android:contentDescription="最新訊息"
+        app:layout_constraintStart_toEndOf="@id/group_creator_avatar"
+        app:layout_constraintEnd_toStartOf="@id/last_message_time"
+        app:layout_constraintTop_toBottomOf="@id/group_name"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- 最後一則訊息的時間 -->
+    <TextView
+        android:id="@+id/last_message_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="12:00"
+        android:textColor="#888888"
+        android:textSize="12sp"
+        android:contentDescription="最後訊息時間"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

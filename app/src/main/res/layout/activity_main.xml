@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <androidx.drawerlayout.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -10,22 +11,23 @@
     tools:openDrawer="start">
 
     <!-- 主內容區域 -->
-    <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="match_parent">
 
+        <!-- 滾動視圖 -->
         <ScrollView
+            android:id="@+id/scroll_view"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1">
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/bottom_navigation">
 
             <RelativeLayout
                 android:id="@+id/main_layout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@color/white"
-                tools:android="true">
+                android:background="@color/white">
 
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
@@ -57,18 +59,6 @@
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="@id/rectangle" />
 
-                    <!-- 鈴鐺圖標 -->
-                    <ImageView
-                        android:id="@+id/bell_icon"
-                        android:layout_width="62dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="8dp"
-                        android:layout_marginEnd="16dp"
-                        android:clickable="true"
-                        android:contentDescription="Notification bell"
-                        android:src="@drawable/bell"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintTop_toTopOf="@id/app_name" />
 
                     <!-- 當前位置（原 currentLocationTextView） -->
                     <TextView
@@ -90,7 +80,7 @@
                     <!-- 白色立體方框（使用 CardView 實現圓角和立體效果） -->
                     <androidx.cardview.widget.CardView
                         android:id="@+id/white_box"
-                        android:layout_width="436dp"
+                        android:layout_width="match_parent"
                         android:layout_height="240dp"
                         android:layout_marginStart="16dp"
                         android:layout_marginTop="16dp"
@@ -104,7 +94,7 @@
 
                         <androidx.constraintlayout.widget.ConstraintLayout
                             android:layout_width="match_parent"
-                            android:layout_height="match_parent">
+                            android:layout_height="wrap_content">
 
                             <!-- 上傳照片文字，位於 CardView 內垂直居中 -->
                             <TextView
@@ -124,7 +114,7 @@
                             <!-- 按鈕：上傳圖片，位於下方垂直居中 -->
                             <Button
                                 android:id="@+id/buttonupload"
-                                android:layout_width="150dp"
+                                android:layout_width="200dp"
                                 android:layout_height="60dp"
                                 android:backgroundTint="@color/mainbutton"
                                 android:textColor="#000000"
@@ -135,9 +125,11 @@
                                 app:layout_constraintStart_toStartOf="parent"
                                 app:layout_constraintEnd_toEndOf="parent"
                                 app:layout_constraintVertical_chainStyle="packed" />
+
+                            <!-- Spinner：圖片來源選擇 -->
                             <Spinner
                                 android:id="@+id/imageSourceSpinner"
-                                android:layout_width="150dp"
+                                android:layout_width="200dp"
                                 android:layout_height="60dp"
                                 android:backgroundTint="@color/mainbutton"
                                 android:textColor="#000000"
@@ -147,8 +139,7 @@
                                 app:layout_constraintBottom_toBottomOf="parent"
                                 app:layout_constraintStart_toStartOf="parent"
                                 app:layout_constraintEnd_toEndOf="parent"
-                                app:layout_constraintVertical_chainStyle="packed" /> />
-
+                                app:layout_constraintVertical_chainStyle="packed" />
                         </androidx.constraintlayout.widget.ConstraintLayout>
                     </androidx.cardview.widget.CardView>
 
@@ -197,17 +188,6 @@
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/armap" />
-
-                    <!-- 佔位 TextView -->
-                    <TextView
-                        android:id="@+id/textView3"
-                        android:layout_width="0dp"
-                        android:layout_height="100dp"
-                        android:layout_marginTop="8dp"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@id/buttonCorrectLocation" />
-
                 </androidx.constraintlayout.widget.ConstraintLayout>
             </RelativeLayout>
         </ScrollView>
@@ -217,14 +197,14 @@
             android:id="@+id/bottom_navigation"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:menu="@menu/bottom_nav_menu"
             app:itemIconSize="40dp"
-            app:itemIconTint="@color/my_forth"
             app:itemTextColor="@color/my_forth"
+            app:itemIconTint="@color/my_forth"
             android:background="@color/barcolor"
             app:labelVisibilityMode="labeled" />
-    </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- 導航抽屜 -->
     <com.google.android.material.navigation.NavigationView

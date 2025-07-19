@@ -14,6 +14,7 @@ import android.widget.ImageView;
 import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.textfield.TextInputLayout;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -28,13 +29,14 @@ public class PersonalAccount extends AppCompatActivity {
     private EditText editTextPassword;
     private Button buttonLogin;
     private Button buttonRegister;
-    private ImageView backArrow; // 添加返回箭頭的 ImageView 變量
+    private ImageView backArrow;
     private RegisterDatabaseHelper dbHelper;
     private SharedPreferences sharedPreferences;
     private List<AlertDialog> invitationDialogs = new ArrayList<>();
     private ProgressDialog progressDialog;
     private ExecutorService executorService;
     private Handler mainHandler;
+    private TextInputLayout textInputLayoutPassword;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,7 +55,8 @@ public class PersonalAccount extends AppCompatActivity {
         editTextPassword = findViewById(R.id.editTextPassword);
         buttonLogin = findViewById(R.id.buttonLogin);
         buttonRegister = findViewById(R.id.buttonRegister);
-        backArrow = findViewById(R.id.backArrow); // 初始化返回箭頭
+        backArrow = findViewById(R.id.backArrow);
+        textInputLayoutPassword = findViewById(R.id.textInputLayoutPassword);
 
         SharedPreferences.Editor editor = sharedPreferences.edit();
         if (!sharedPreferences.getBoolean("isLoggedIn", false)) {
@@ -67,8 +70,8 @@ public class PersonalAccount extends AppCompatActivity {
         backArrow.setOnClickListener(v -> {
             Intent intent = new Intent(PersonalAccount.this, MainActivity.class);
             startActivity(intent);
-            overridePendingTransition(R.anim.enter_from_left, R.anim.exit_to_right); // 可選：添加動畫
-            finish(); // 結束當前活動
+            overridePendingTransition(R.anim.enter_from_left, R.anim.exit_to_right);
+            finish();
         });
 
         buttonLogin.setOnClickListener(v -> {
@@ -82,23 +85,19 @@ public class PersonalAccount extends AppCompatActivity {
             }
 
             if (password.isEmpty()) {
-                editTextPassword.setError("密碼不能為空白");
+                textInputLayoutPassword.setError("密碼不能為空白");
                 editTextPassword.requestFocus();
                 return;
             }
 
-            // 顯示載入對話框
             progressDialog = new ProgressDialog(PersonalAccount.this);
             progressDialog.setMessage("正在登入...");
             progressDialog.setCancelable(false);
             progressDialog.show();
 
-            // 在背景執行緒中執行登錄
             executorService.execute(() -> {
-                // 優先檢查本地數據庫中的用戶憑證
                 boolean loginSuccess = dbHelper.checkUser(username, password);
 
-                // 在主執行緒中更新 UI
                 mainHandler.post(() -> {
                     progressDialog.dismiss();
 
@@ -116,13 +115,10 @@ public class PersonalAccount extends AppCompatActivity {
                         loginEditor.putString("profileImageUrl", profileImageUrl);
                         loginEditor.apply();
 
-                        // 檢查群組邀請（本地數據）
                         checkGroupInvitations(username, password);
 
-                        // 啟動後台同步，獨立於登錄流程
                         startBackgroundSync();
 
-                        // 跳轉到 UserProfileActivity
                         Set<String> groupNames = sharedPreferences.getStringSet("group_names", new HashSet<>());
                         Intent intent = new Intent(PersonalAccount.this, UserProfileActivity.class);
                         intent.putExtra("username", username);
@@ -161,10 +157,8 @@ public class PersonalAccount extends AppCompatActivity {
     }
 
     private void startBackgroundSync() {
-        // 在背景執行緒中執行同步
         executorService.execute(() -> {
-            // 使用 SyncCallback 處理同步結果
-            AtomicBoolean syncSuccess = new AtomicBoolean(false); // 使用 AtomicBoolean 跨執行緒共享狀態
+            AtomicBoolean syncSuccess = new AtomicBoolean(false);
             dbHelper.syncDatabase(new RegisterDatabaseHelper.SyncCallback() {
                 @Override
                 public void onSyncComplete(boolean success) {
@@ -178,7 +172,6 @@ public class PersonalAccount extends AppCompatActivity {
                     Toast.makeText(PersonalAccount.this, "資料庫同步失敗，將在下次嘗試", Toast.LENGTH_LONG).show();
                 } else {
                     Log.d("PersonalAccount", "Background database sync completed");
-                    // 同步完成後重新檢查邀請
                     String username = sharedPreferences.getString("loggedInUser", null);
                     String userId = dbHelper.getUserIdFromUsername(username);
                     if (userId != null) {
@@ -252,6 +245,9 @@ public class PersonalAccount extends AppCompatActivity {
         }
         invitationDialogs.clear();
         executorService.shutdown();
+        if (dbHelper != null) {
+            dbHelper.closeDatabase();
+        }
         super.onDestroy();
     }
 }

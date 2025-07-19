@@ -12,29 +12,59 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- AppBarLayout 用於包含 Toolbar -->
+        <!-- AppBarLayout 用於包含頂部欄 -->
         <com.google.android.material.appbar.AppBarLayout
             android:id="@+id/appBarLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
-
-            <!-- Toolbar -->
-            <androidx.appcompat.widget.Toolbar
-                android:id="@+id/toolbar"
+            <!-- 頂部欄 -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
-                android:background="#3F51B5"
-                android:elevation="4dp"
-                app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
-            <Button
-                android:id="@+id/buttonRefresh"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="刷新訊息"
-                android:layout_below="@id/textViewMembers"
-                android:layout_centerHorizontal="true" />
+                android:background="@color/mainbutton"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <!-- 返回箭頭 -->
+                <ImageView
+                    android:id="@+id/backArrow"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="16dp"
+                    android:src="@drawable/ic_back_arrow_2"
+                    android:contentDescription="Back" />
+
+                <!-- 群組名稱 -->
+                <TextView
+                    android:id="@+id/textViewGroupName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text=" "
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/black"
+                    android:padding="8dp" />
+
+                <!-- 填充空間 -->
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+
+                <!-- 刷新圖標 -->
+                <ImageView
+                    android:id="@+id/refreshIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="16dp"
+                    android:src="@drawable/ic_refresh"
+                    android:contentDescription="Refresh" />
+
+            </LinearLayout>
+
         </com.google.android.material.appbar.AppBarLayout>
 
         <!-- 主內容 -->
@@ -45,34 +75,6 @@
             android:padding="16dp"
             android:background="@android:color/white">
 
-            <!-- 群組名稱 -->
-            <TextView
-                android:id="@+id/textViewGroupName"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="Group: "
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@android:color/black"
-                android:padding="8dp"
-                android:background="@android:color/transparent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent" />
-
-            <!-- 群組成員 -->
-            <TextView
-                android:id="@+id/textViewMembers"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:text="Members: "
-                android:textSize="16sp"
-                android:textColor="@android:color/darker_gray"
-                android:padding="8dp"
-                app:layout_constraintTop_toBottomOf="@id/textViewGroupName"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent" />
-
             <!-- 訊息列表 -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/messageRecyclerView"
@@ -81,12 +83,10 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
                 android:background="@android:color/transparent"
-                app:layout_constraintTop_toBottomOf="@id/textViewMembers"
+                app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toTopOf="@id/messageInputLayout"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent" />
-
-
 
             <!-- 輸入框和發送按鈕 -->
             <LinearLayout
@@ -106,7 +106,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:hint="Type a message..."
+                    android:hint="發送訊息..."
                     android:padding="12dp"
                     android:background="@android:drawable/edit_text"
                     android:textSize="16sp"
@@ -118,9 +118,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="Send"
-                    android:textColor="@android:color/white"
-                    android:backgroundTint="@android:color/holo_blue_light"
+                    android:text="傳送"
+                    android:textColor="@color/black"
+                    android:backgroundTint="@color/color_change_blue"
                     android:padding="8dp" />
             </LinearLayout>
         </androidx.constraintlayout.widget.ConstraintLayout>

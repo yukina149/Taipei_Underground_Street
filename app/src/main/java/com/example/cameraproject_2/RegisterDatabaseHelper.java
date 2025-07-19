@@ -14,6 +14,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteDatabaseLockedException;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.icu.text.SimpleDateFormat;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -33,8 +34,10 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -87,7 +90,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private static final String KEY_LAST_SYNC_TIME = "last_sync_time";
 
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
-    private static String SERVER_URL = "http://3.107.23.176/android_studio";
+    private static String SERVER_URL = "http://13.239.97.6/android_studio";
 
     private SQLiteDatabase db;
     private static final Object dbLock = new Object();
@@ -98,7 +101,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public RegisterDatabaseHelper(Context context) {
         super(context, REGISTER_DB_NAME, null, DATABASE_VERSION);
         this.context = context;
-        SERVER_URL = "http://3.107.23.176/android_studio";
+        SERVER_URL = "http://13.239.97.6/android_studio";
         loadServerUrl();
         checkDatabaseIntegrity();
         cleanInvalidUsers();
@@ -107,7 +110,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
     private void loadServerUrl() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String defaultUrl = "http://3.107.23.176/android_studio";
+        String defaultUrl = "http://13.239.97.6/android_studio";
         SERVER_URL = prefs.getString(KEY_SERVER_URL, defaultUrl);
         Log.d(TAG, "載入的 SERVER_URL: " + SERVER_URL);
         SharedPreferences.Editor editor = prefs.edit();
@@ -1482,6 +1485,98 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 throw new IOException(jsonResponse.getString("message"));
             }
         }
+    }
+
+    // 新增 deleteUser 方法
+    // 在 RegisterDatabaseHelper.java 中更新 deleteUser 方法
+    public boolean deleteUser(String userId) {
+        SQLiteDatabase db = getRegisterDatabase();
+        db.beginTransaction();
+        try {
+            int rowsAffected = db.delete(TABLE_NAME, COL_ID + "=?", new String[]{userId});
+            if (rowsAffected > 0) {
+                Log.d(TAG, "成功刪除用戶ID: " + userId);
+                // 可選：同步至伺服器
+                ContentValues values = new ContentValues();
+                values.put(COL_SYNC_ACTION, "delete");
+                values.put(COL_IS_SYNCED, 0);
+                db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_IGNORE); // 記錄刪除操作
+                db.setTransactionSuccessful();
+                return true;
+            } else {
+                Log.e(TAG, "刪除用戶ID: " + userId + " 失敗，無匹配記錄");
+                return false;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "刪除用戶ID: " + userId + " 時出錯: " + e.getMessage());
+            return false;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    public String getUserAvatarUrl(String userId) {
+        if (userId == null) return null;
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE_NAME, // Use TABLE_NAME ("Users")
+                new String[]{COL_PROFILE_IMAGE_URL}, // Use COL_PROFILE_IMAGE_URL ("profile_image_url")
+                COL_ID + " = ?",
+                new String[]{userId},
+                null, null, null);
+        String avatarUrl = null;
+        if (cursor.moveToFirst()) {
+            avatarUrl = cursor.getString(cursor.getColumnIndexOrThrow(COL_PROFILE_IMAGE_URL));
+        }
+        cursor.close();
+        return avatarUrl;
+    }
+
+    public List<String> getGroupMembers(String groupName) {
+        List<String> members = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE_INVITATIONS,
+                new String[]{COL_INVITED_USER},
+                COL_GROUP_NAME + "=? AND " + COL_STATUS + "=?",
+                new String[]{groupName, "accepted"},
+                null, null, null);
+        while (cursor.moveToNext()) {
+            String userId = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITED_USER));
+            members.add(userId);
+        }
+        cursor.close();
+        return members;
+    }
+
+    public String getLastMessage(String groupName) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE_MESSAGES,
+                new String[]{COL_MESSAGE},
+                COL_GROUP_NAME + "=?",
+                new String[]{groupName},
+                null, null, COL_TIMESTAMP + " DESC LIMIT 1");
+        String lastMessage = "無訊息";
+        if (cursor.moveToFirst()) {
+            lastMessage = cursor.getString(cursor.getColumnIndexOrThrow(COL_MESSAGE));
+        }
+        cursor.close();
+        return lastMessage;
+    }
+
+    public String getLastMessageTime(String groupName) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE_MESSAGES,
+                new String[]{COL_TIMESTAMP},
+                COL_GROUP_NAME + "=?",
+                new String[]{groupName},
+                null, null, COL_TIMESTAMP + " DESC LIMIT 1");
+        String lastMessageTime = "";
+        if (cursor.moveToFirst()) {
+            long timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(COL_TIMESTAMP));
+            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
+            lastMessageTime = sdf.format(new Date(timestamp));
+        }
+        cursor.close();
+        return lastMessageTime;
     }
 
     @Override

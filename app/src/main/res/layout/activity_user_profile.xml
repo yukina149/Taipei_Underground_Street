@@ -1,61 +1,303 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:gravity="center">
+    android:background="#FFFFFF">
 
-    <ImageView
+    <!-- 頂部 BAR -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        app:cardElevation="4dp"
+        app:cardCornerRadius="0dp"
+        android:layout_marginBottom="4dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FFFFFF"
+            android:gravity="center_vertical">
+
+            <!-- 返回箭頭 -->
+            <ImageView
+                android:id="@+id/backArrow"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="16dp"
+                android:src="@drawable/ic_back_arrow_2"
+                android:contentDescription="Back" />
+
+            <!-- 中間文字 "個人檔案" -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:text="個人檔案"
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- 色塊區域與內容區域容器 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_marginTop="60dp">
+
+        <!-- 色塊區域 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="0.3">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/color_change_blue"
+                android:gravity="center">
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- 內容區域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <!-- 新增的變更暱稱區域 -->
+            <LinearLayout
+                android:id="@+id/change_nickname_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="-56dp"
+                android:layout_marginEnd="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/text_view_change_nickname"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="變更暱稱"
+                    android:textColor="#000000"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <ImageView
+                    android:id="@+id/chevron_right"
+                    android:layout_width="18dp"
+                    android:layout_height="19dp"
+                    android:contentDescription="Chevron Right"
+                    android:src="@drawable/chevron_right" />
+            </LinearLayout>
+
+            <!-- 分隔線 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                android:background="#CCCCCC" />
+
+            <!-- 新增的變更密碼區域 -->
+            <LinearLayout
+                android:id="@+id/change_password_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/text_view_account_nickname"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="變更密碼"
+                    android:textColor="#000000"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <ImageView
+                    android:id="@+id/chevron_right_icon"
+                    android:layout_width="18dp"
+                    android:layout_height="19dp"
+                    android:contentDescription="Chevron Right"
+                    android:src="@drawable/chevron_right" />
+            </LinearLayout>
+
+            <!-- 分隔線 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                android:background="#CCCCCC" />
+
+            <!-- 新增的登出區域 -->
+            <LinearLayout
+                android:id="@+id/logout_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/text_view_layout_nickname"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="登出"
+                    android:textColor="#000000"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <ImageView
+                    android:id="@+id/chevron_right_icon"
+                    android:layout_width="18dp"
+                    android:layout_height="19dp"
+                    android:contentDescription="Chevron Right"
+                    android:src="@drawable/chevron_right" />
+            </LinearLayout>
+
+            <!-- 分隔線 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                android:background="#CCCCCC" />
+
+            <!-- 新增的帳號刪除區域 -->
+            <LinearLayout
+                android:id="@+id/delete_account_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/text_view_delete_account"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="刪除帳號"
+                    android:textColor="@color/red"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <ImageView
+                    android:id="@+id/chevron_right_icon"
+                    android:layout_width="18dp"
+                    android:layout_height="19dp"
+                    android:contentDescription="Chevron Right"
+                    android:src="@drawable/chevron_right" />
+            </LinearLayout>
+
+            <!-- 分隔線 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                android:background="#CCCCCC" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 圓形頭像 -->
+    <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/profile_image"
         android:layout_width="120dp"
         android:layout_height="120dp"
+        android:layout_gravity="start"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="156dp"
         android:src="@drawable/user"
         android:contentDescription="Profile Image"
-        android:scaleType="centerCrop" />
+        android:scaleType="centerCrop"
+        app:shapeAppearanceOverlay="@style/CircularShapeAppearance" />
 
-    <Button
-        android:id="@+id/button_change_profile"
+    <!-- 圓形與鉛筆圖標組合 -->
+    <FrameLayout
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_marginTop="230dp"
+        android:layout_marginStart="110dp">
+
+        <!-- 圓形圖標 -->
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/circle_icon"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:contentDescription="Circle"
+            android:src="@drawable/ic_circle"
+            app:shapeAppearanceOverlay="@style/CircularShapeAppearance"/>
+
+        <!-- 鉛筆圖標，居中疊加 -->
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:contentDescription="Pencil"
+            android:src="@drawable/ic_pencil" />
+    </FrameLayout>
+
+    <!-- 新增的帳號文字，與頭像頂部對齊 -->
+    <TextView
+        android:id="@+id/text_view_name_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="更改頭像"
-        android:layout_marginTop="16dp" />
-
-    <EditText
-        android:id="@+id/edit_text_username"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="修改姓名"
-        android:inputType="text"
-        android:layout_marginTop="16dp"
-        android:maxLines="1" />
-
-    <Button
-        android:id="@+id/button_confirm_username"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="確認更改姓名" />
+        android:layout_marginStart="150dp"
+        android:layout_marginTop="156dp"
+        android:text="姓名: "
+        android:textColor="#000000"
+        android:textSize="16sp"
+        android:textStyle="bold" />
 
     <TextView
-        android:id="@+id/text_view_user_id"
+        android:id="@+id/text_view_account_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="帳號: "
-        android:layout_marginTop="16dp" />
+        android:layout_marginStart="150dp"
+        android:layout_marginTop="186dp"
+        android:text="ID: "
+        android:textColor="#000000"
+        android:textSize="16sp"
+        android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/button_change_password"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="更改密碼"
-        android:layout_marginTop="16dp" />
-
-    <Button
-        android:id="@+id/button_logout"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="登出"
-        android:layout_marginTop="16dp" />
-
-</LinearLayout>
+</FrameLayout>

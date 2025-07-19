@@ -118,9 +118,9 @@ public class IntroductoryActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        // 約3.5秒後跳轉到 MainActivity（500ms 延遲 + 1000ms 進入 + 1000ms 停留 + 1000ms 離開）
+        // 約3.5秒後跳轉到 AppGuideActivity（500ms 延遲 + 1000ms 進入 + 1000ms 停留 + 1000ms 離開）
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            startActivity(new Intent(IntroductoryActivity.this, MainActivity.class));
+            startActivity(new Intent(IntroductoryActivity.this, AppGuideActivity.class));
             finish();
         }, 3500);
     }

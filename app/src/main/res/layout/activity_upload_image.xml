@@ -56,18 +56,6 @@
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="@id/rectangle" />
 
-                    <!-- 鈴鐺圖標 -->
-                    <ImageView
-                        android:id="@+id/bell_icon"
-                        android:layout_width="62dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="8dp"
-                        android:layout_marginEnd="16dp"
-                        android:clickable="true"
-                        android:contentDescription="Notification bell"
-                        android:src="@drawable/bell"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintTop_toTopOf="@id/app_name" />
 
                     <!-- 當前位置（原 currentLocationTextView） -->
                     <TextView
@@ -262,16 +250,6 @@
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/armap" />
-
-                    <!-- 佔位 TextView -->
-                    <TextView
-                        android:id="@+id/textView3"
-                        android:layout_width="0dp"
-                        android:layout_height="100dp"
-                        android:layout_marginTop="8dp"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@id/buttonCorrectLocation" />
 
                 </androidx.constraintlayout.widget.ConstraintLayout>
             </RelativeLayout>

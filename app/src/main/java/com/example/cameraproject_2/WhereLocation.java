@@ -9,117 +9,66 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.GestureDetector;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
+import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.File;
 import java.util.ArrayList;
 
 public class WhereLocation extends AppCompatActivity {
 
-    private LinearLayout container;
+    private RecyclerView container;
+    private TextView bottomText;
     private static final int REQUEST_LOCATION_CONFIRM = 1001;
+    private static final String TAG = "WhereLocation";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_where_location);
-        Button buttonBack = findViewById(R.id.buttonBack);
 
         container = findViewById(R.id.location_container);
+        bottomText = findViewById(R.id.bottom_text);
+
+        // 設置 RecyclerView
+        container.setLayoutManager(new GridLayoutManager(this, 2)); // 兩欄
+        LocationAdapter adapter = new LocationAdapter();
+        container.setAdapter(adapter);
+        container.setHasFixedSize(true); // 優化性能
+        container.requestLayout(); // 強制重新計算佈局
 
         // 獲取傳遞的 topMatches
         Intent intent = getIntent();
         ArrayList<MatchResult> topMatches = intent.getParcelableArrayListExtra("topMatches");
+        Log.d(TAG, "topMatches size: " + (topMatches != null ? topMatches.size() : "null"));
         if (topMatches == null || topMatches.isEmpty()) {
             Toast.makeText(this, "無匹配結果", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        // 顯示所有 topMatches 中的資料
-        for (int i = 0; i < topMatches.size(); i++) {
-            MatchResult match = topMatches.get(i);
-            addLocationItem(match.getUri(), match.getLocation(), i + 1);
-        }
+        // 更新底部文字
+        bottomText.setText("共 " + topMatches.size() + " 個匹配結果");
+        adapter.setData(topMatches);
 
-        buttonBack.setOnClickListener(v -> {
-            finish(); // 返回 MainActivity
+        // 設置返回箭頭點擊事件，返回到 UploadImage
+        findViewById(R.id.backArrow).setOnClickListener(v -> {
+            onBackPressed();
         });
-    }
-
-    private void addLocationItem(String uriString, String location, int index) {
-        LinearLayout itemLayout = new LinearLayout(this);
-        itemLayout.setOrientation(LinearLayout.VERTICAL);
-        itemLayout.setPadding(16, 16, 16, 16);
-        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        layoutParams.setMargins(0, 0, 0, 16);
-        itemLayout.setLayoutParams(layoutParams);
-
-        ImageView imageView = new ImageView(this);
-
-        // 將 uriString 轉換為 DatabaseHelper 儲存的圖片路徑
-        String imagePath = getImagePathFromUri(uriString);
-        File imageFile = new File(imagePath);
-        Bitmap bitmap = null;
-        if (imageFile.exists()) {
-            bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
-        }
-        if (bitmap != null) {
-            imageView.setImageBitmap(bitmap);
-        } else {
-            Log.e("WhereLocationActivity", "Failed to load image from path: " + imagePath);
-            imageView.setImageResource(android.R.drawable.ic_menu_gallery);
-        }
-
-        imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        imageView.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                300
-        ));
-
-        // 添加單擊事件（顯示/隱藏位置資訊）
-        imageView.setOnClickListener(v -> toggleLocationInfo(itemLayout, location));
-
-        // 添加雙擊事件（使用 GestureDetector）
-        GestureDetector gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onDoubleTap(MotionEvent e) {
-                showLocationDialog(location);
-                return true;
-            }
-        });
-
-        imageView.setOnTouchListener((v, event) -> {
-            gestureDetector.onTouchEvent(event);
-            return false; // 允許其他事件（如單擊）繼續處理
-        });
-
-        itemLayout.addView(imageView);
-
-        TextView locationText = new TextView(this);
-        locationText.setText(location);
-        locationText.setPadding(16, 8, 16, 8);
-        locationText.setVisibility(View.GONE);
-        itemLayout.addView(locationText);
-
-        container.addView(itemLayout);
     }
 
     // 根據 uriString 獲取圖片路徑，與 DatabaseHelper 一致
     private String getImagePathFromUri(String uriString) {
-        // 假設 uriString 是圖片檔案名稱（例如從 MatchResult 傳來的）
-        // 或者需要解析 URI 得到檔案名稱
         String fileName = uriString; // 預設為檔案名稱
         if (uriString.startsWith("file://")) {
             fileName = new File(Uri.parse(uriString).getPath()).getName();
@@ -127,19 +76,10 @@ public class WhereLocation extends AppCompatActivity {
             fileName = new File(uriString).getName();
         }
 
-        // 構建與 DatabaseHelper 相同的圖片路徑
         File imagesDir = new File(getFilesDir(), "images");
-        return new File(imagesDir, fileName).getAbsolutePath();
-    }
-
-    private void toggleLocationInfo(LinearLayout itemLayout, String location) {
-        TextView locationText = (TextView) itemLayout.getChildAt(1);
-        if (locationText.getVisibility() == View.GONE) {
-            locationText.setVisibility(View.VISIBLE);
-            locationText.setText(location);
-        } else {
-            locationText.setVisibility(View.GONE);
-        }
+        String imagePath = new File(imagesDir, fileName).getAbsolutePath();
+        Log.d(TAG, "Image path: " + imagePath);
+        return imagePath;
     }
 
     private void showLocationDialog(String location) {
@@ -147,18 +87,108 @@ public class WhereLocation extends AppCompatActivity {
         builder.setTitle("確認位置");
         builder.setMessage("您現在的位置是：" + location + "\n是否確認？");
         builder.setPositiveButton("確認", (dialog, which) -> {
-            // 將選中的位置傳回 MainActivity
             Intent resultIntent = new Intent();
             resultIntent.putExtra("selectedLocation", location);
             setResult(RESULT_OK, resultIntent);
             finish();
         });
         builder.setNegativeButton("我再看看", (dialog, which) -> {
-            // 關閉對話框，不做任何操作
             dialog.dismiss();
         });
-        builder.setCancelable(false); // 禁止點擊外部關閉對話框
+        builder.setCancelable(false);
         AlertDialog dialog = builder.create();
         dialog.show();
+    }
+
+    // RecyclerView Adapter
+    private class LocationAdapter extends RecyclerView.Adapter<LocationAdapter.ViewHolder> {
+        private ArrayList<MatchResult> data = new ArrayList<>();
+
+        public void setData(ArrayList<MatchResult> newData) {
+            data.clear();
+            if (newData != null) {
+                data.addAll(newData);
+                Log.d(TAG, "Adapter data size: " + data.size());
+            }
+            notifyDataSetChanged();
+        }
+
+        @Override
+        public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_location_card, parent, false);
+            return new ViewHolder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(ViewHolder holder, int position) {
+            Log.d(TAG, "Binding item at position: " + position);
+            MatchResult match = data.get(position);
+            String uriString = match.getUri();
+            String location = match.getLocation();
+
+            // 載入圖片
+            String imagePath = getImagePathFromUri(uriString);
+            File imageFile = new File(imagePath);
+            Bitmap bitmap = null;
+            if (imageFile.exists()) {
+                bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
+                Log.d(TAG, "Image loaded from: " + imagePath);
+            }
+            if (bitmap != null) {
+                holder.imageView.setImageBitmap(bitmap);
+            } else {
+                Log.e(TAG, "Failed to load image from path: " + imagePath);
+                holder.imageView.setImageResource(android.R.drawable.ic_menu_gallery);
+            }
+
+            // 設置位置文字
+            holder.locationText.setText(location);
+            holder.locationText.setVisibility(View.GONE);
+
+            // 添加單擊事件
+            holder.cardView.setOnClickListener(v -> toggleLocationInfo(holder.cardView, location));
+
+            // 添加雙擊事件
+            GestureDetector gestureDetector = new GestureDetector(WhereLocation.this, new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onDoubleTap(MotionEvent e) {
+                    showLocationDialog(location);
+                    return true;
+                }
+            });
+
+            holder.cardView.setOnTouchListener((v, event) -> {
+                gestureDetector.onTouchEvent(event);
+                return false;
+            });
+        }
+
+        @Override
+        public int getItemCount() {
+            return data.size();
+        }
+
+        public class ViewHolder extends RecyclerView.ViewHolder {
+            CardView cardView;
+            ImageView imageView;
+            TextView locationText;
+
+            public ViewHolder(View itemView) {
+                super(itemView);
+                cardView = itemView.findViewById(R.id.card_view);
+                imageView = itemView.findViewById(R.id.card_image);
+                locationText = itemView.findViewById(R.id.card_location);
+            }
+        }
+    }
+
+    private void toggleLocationInfo(CardView cardView, String location) {
+        TextView locationText = cardView.findViewById(R.id.card_location);
+        if (locationText.getVisibility() == View.GONE) {
+            locationText.setVisibility(View.VISIBLE);
+            locationText.setText(location);
+        } else {
+            locationText.setVisibility(View.GONE);
+        }
     }
 }

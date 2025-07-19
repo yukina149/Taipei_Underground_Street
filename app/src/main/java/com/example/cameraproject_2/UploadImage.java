@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class UploadImage extends AppCompatActivity {
@@ -98,25 +99,51 @@ public class UploadImage extends AppCompatActivity {
             int id = item.getItemId();
             if (id == R.id.homefill) {
                 Toast.makeText(this, R.string.home_page, Toast.LENGTH_SHORT).show();
-                return true;
             } else if (id == R.id.chat) {
                 boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
-                Intent intent = new Intent(UploadImage.this, isLoggedIn ? Chatroom.class : PersonalAccount.class);
-                startActivity(intent);
-                return true;
+                Log.d("MainActivity", "Navigating to Chatroom, isLoggedIn: " + isLoggedIn);
+                if (!isLoggedIn) {
+                    Intent intent = new Intent(UploadImage.this, PersonalAccount.class);
+                    startActivity(intent);
+                } else {
+                    Set<String> groupNames = sharedPreferences.getStringSet("groupNames", new HashSet<>());
+                    if (groupNames == null || groupNames.isEmpty()) {
+                        Intent intent = new Intent(UploadImage.this, chatroom_main.class);
+                        startActivity(intent);
+                    } else {
+                        String defaultGroup = groupNames.iterator().next(); // 取第一個群組
+                        String membersString = sharedPreferences.getString(defaultGroup + "_members", "");
+                        List<String> members = new ArrayList<>();
+                        if (!membersString.isEmpty()) {
+                            String[] membersArray = membersString.split(",");
+                            for (String member : membersArray) {
+                                members.add(member.trim());
+                            }
+                        }
+                        Intent intent = new Intent(UploadImage.this, chatroom_main.class);
+                        intent.putExtra("groupName", defaultGroup);
+                        intent.putStringArrayListExtra("members", new ArrayList<>(members));
+                        startActivity(intent);
+                    }
+                }
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             } else if (id == R.id.nav_member) {
-                Intent intent = new Intent(UploadImage.this, PersonalAccount.class);
+                // 保持原有邏輯不變
+                boolean isLoggedIn = sharedPreferences.getBoolean("isLoggedIn", false);
+                Intent intent = new Intent(UploadImage.this, isLoggedIn ? UserProfileActivity.class : PersonalAccount.class);
+                intent.putExtra("isLoggedIn", isLoggedIn);
+                intent.putExtra("userId", sharedPreferences.getString("userId", "訪客"));
+                intent.putExtra("loggedInUser", sharedPreferences.getString("loggedInUser", "訪客"));
                 startActivity(intent);
-                return true;
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             } else if (id == R.id.nav_info) {
                 Toast.makeText(this, R.string.taipei_info, Toast.LENGTH_SHORT).show();
-                return true;
             } else if (id == R.id.nav_settings) {
                 Intent intent = new Intent(UploadImage.this, SettingsActivity.class);
                 startActivity(intent);
-                return true;
+                overridePendingTransition(R.anim.enter_from_right, R.anim.exit_to_left);
             }
-            return false;
+            return true;
         });
         bottomNavigationView.setSelectedItemId(R.id.homefill);
 

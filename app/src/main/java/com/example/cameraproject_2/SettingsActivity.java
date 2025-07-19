@@ -14,7 +14,6 @@ import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -45,13 +44,8 @@ public class SettingsActivity extends AppCompatActivity {
         // 應用當前語言
         applyLanguage(currentLang);
 
-        // 設置 Toolbar
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setDisplayShowHomeEnabled(true);
-        }
+        // 使用現有的 backArrow ImageView 處理返回到 MainActivity
+        findViewById(R.id.backArrow).setOnClickListener(v -> onBackPressed());
 
         // 初始化資料庫
         registerDbHelper = new RegisterDatabaseHelper(this);
@@ -111,37 +105,12 @@ public class SettingsActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
 
-        // 使用說明
+        // 使用說明：啟動 AppGuideActivity
         findViewById(R.id.help_text).setOnClickListener(v -> {
-            new AlertDialog.Builder(SettingsActivity.this)
-                    .setTitle(R.string.user_guide)
-                    .setMessage(R.string.user_guide_content)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show();
-        });
-
-        // 刪除帳號
-        findViewById(R.id.delete_account_text).setOnClickListener(v -> {
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.delete_account)
-                    .setMessage(R.string.delete_account_confirm)
-                    .setPositiveButton(R.string.delete, (dialog, which) -> {
-                        String userId = sharedPreferences.getString("userId", null);
-                        if (userId != null) {
-                            registerDbHelper.deleteUserData(userId);
-                            sharedPreferences.edit()
-                                    .clear()
-                                    .putString("userId", getString(R.string.guest))
-                                    .putBoolean("isLoggedIn", false)
-                                    .apply();
-                            Toast.makeText(this, R.string.account_deleted, Toast.LENGTH_SHORT).show();
-                            finish();
-                        } else {
-                            Toast.makeText(this, R.string.user_info_not_found, Toast.LENGTH_SHORT).show();
-                        }
-                    })
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show();
+            Intent intent = new Intent(SettingsActivity.this, AppGuideActivity.class);
+            // 傳遞標誌以繞過「不再顯示」檢查
+            intent.putExtra("FORCE_SHOW_GUIDE", true);
+            startActivity(intent);
         });
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -153,10 +122,6 @@ public class SettingsActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == android.R.id.home) {
-            onBackPressed();
-            return true;
-        }
         return super.onOptionsItemSelected(item);
     }
 

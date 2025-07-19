@@ -5,11 +5,11 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Point;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
+import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -43,11 +43,12 @@ public class ORBActivity extends AppCompatActivity {
 
     private ImageView uploadedImageView;
     private TextView locationTextView;
+    private View overlayView;
+    private View loadingLayout;
     private Mat uploadedImageMat;
     private PictureDatabaseHelper dbHelper;
     private SQLiteDatabase database;
     private List<LocationData> locationDataList;
-    private ImageView databaseImageView;
     private ArrayList<MatchResult> matchResults = new ArrayList<>();
 
     @Override
@@ -64,9 +65,11 @@ public class ORBActivity extends AppCompatActivity {
             Log.d("ORBActivity", "OpenCV initialized successfully");
         }
 
+        // 初始化視圖
         uploadedImageView = findViewById(R.id.uploadedImageView);
         locationTextView = findViewById(R.id.locationTextView);
-        databaseImageView = findViewById(R.id.databaseImageView);
+        overlayView = findViewById(R.id.overlayView);
+        loadingLayout = findViewById(R.id.loadingLayout);
 
         dbHelper = new PictureDatabaseHelper(this);
         database = dbHelper.getPictureDatabase();
@@ -101,9 +104,19 @@ public class ORBActivity extends AppCompatActivity {
             Imgproc.cvtColor(uploadedImageMat, uploadedImageMat, Imgproc.COLOR_BGR2GRAY);
             Imgproc.equalizeHist(uploadedImageMat, uploadedImageMat);
 
+            // 顯示覆蓋層和載入指示器
+            runOnUiThread(() -> {
+                overlayView.setVisibility(View.VISIBLE);
+                loadingLayout.setVisibility(View.VISIBLE);
+            });
+
             new Thread(() -> {
                 ArrayList<MatchResult> topMatches = compareImageWithDatabase(uploadedImageMat, imageUri);
                 runOnUiThread(() -> {
+                    // 隱藏覆蓋層和載入指示器
+                    overlayView.setVisibility(View.GONE);
+                    loadingLayout.setVisibility(View.GONE);
+
                     Intent resultIntent = new Intent();
                     Log.d("ORBActivity", "Top matches size: " + topMatches.size());
                     if (!topMatches.isEmpty()) {
@@ -126,8 +139,12 @@ public class ORBActivity extends AppCompatActivity {
             inputStream.close();
         } catch (IOException e) {
             Log.e("ORBActivity", "Error processing image: " + e.getMessage());
-            Toast.makeText(this, "Error processing image", Toast.LENGTH_SHORT).show();
-            finish();
+            runOnUiThread(() -> {
+                overlayView.setVisibility(View.GONE);
+                loadingLayout.setVisibility(View.GONE);
+                Toast.makeText(this, "Error processing image", Toast.LENGTH_SHORT).show();
+                finish();
+            });
         }
     }
 
@@ -207,11 +224,11 @@ public class ORBActivity extends AppCompatActivity {
                 Mat homography = Calib3d.findHomography(srcPts, dstPts, Calib3d.RANSAC, 3, mask);
                 if (homography.rows() > 0 && homography.cols() > 0) {
                     int inliers = Core.countNonZero(mask);
-                    if (inliers > 3) { // 降低門檻以測試
+                    if (inliers > 3) {
                         int numMatchesAdjusted = inliers;
                         Log.d("ORBActivity", "Matches for " + imageFileName + " after RANSAC: " + numMatchesAdjusted);
 
-                        if (numMatchesAdjusted >= 3) { // 降低門檻以測試
+                        if (numMatchesAdjusted >= 3) {
                             String correctedFileName = imageFileName.startsWith("images/") ? imageFileName : "images/" + imageFileName;
                             String imageUriString = "file://assets/" + correctedFileName;
                             matchResults.add(new MatchResult(imageUriString, locationData.getLocationName(), numMatchesAdjusted));
@@ -237,7 +254,6 @@ public class ORBActivity extends AppCompatActivity {
     }
 
     private String getImageFileName(int imageId) {
-        // Use the method from PictureDatabaseHelper
         return dbHelper.getImageFileName(imageId);
     }
 
@@ -282,7 +298,7 @@ public class ORBActivity extends AppCompatActivity {
             return bitmap;
         } catch (Exception e) {
             Log.e("ORBActivity", "Error loading image from file: " + fileName + ", Error: " + e.getMessage());
-            return null; // 返回 null，允許後續邏輯處理缺失情況
+            return null;
         }
     }
 

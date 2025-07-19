@@ -6,9 +6,12 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.material.textfield.TextInputLayout;
 
 import java.io.IOException;
 
@@ -19,8 +22,11 @@ public class CreatAccount extends AppCompatActivity {
     private EditText editTextNewPassword;
     private EditText editTextConfirmPassword;
     private Button buttonConfirmRegister;
-    private RegisterDatabaseHelper dbHelper; // Change to RegisterDatabaseHelper
+    private RegisterDatabaseHelper dbHelper;
     private SharedPreferences sharedPreferences;
+    private ImageView backArrow; // 添加返回箭頭的 ImageView 變量
+    private TextInputLayout textInputLayoutNewPassword;
+    private TextInputLayout textInputLayoutConfirmPassword;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,7 +37,7 @@ public class CreatAccount extends AppCompatActivity {
         sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
 
         // 初始化資料庫
-        dbHelper = new RegisterDatabaseHelper(this); // Change to RegisterDatabaseHelper
+        dbHelper = new RegisterDatabaseHelper(this);
 
         // 初始化 UI 元素
         editTextNewUsername = findViewById(R.id.editTextNewUsername);
@@ -39,6 +45,28 @@ public class CreatAccount extends AppCompatActivity {
         editTextNewPassword = findViewById(R.id.editTextNewPassword);
         editTextConfirmPassword = findViewById(R.id.editTextConfirmPassword);
         buttonConfirmRegister = findViewById(R.id.buttonConfirmRegister);
+        backArrow = findViewById(R.id.backArrow);
+        textInputLayoutNewPassword = findViewById(R.id.textInputLayoutNewPassword);
+        textInputLayoutConfirmPassword = findViewById(R.id.textInputLayoutConfirmPassword);
+
+        // 檢查 backArrow 是否成功初始化
+        if (backArrow == null) {
+            Log.e("CreatAccount", "backArrow not found in layout");
+        } else {
+            Log.d("CreatAccount", "backArrow found successfully");
+        }
+
+        // 設置返回箭頭的點擊事件
+        backArrow.setOnClickListener(v -> {
+            if (backArrow != null) {
+                Intent intent = new Intent(CreatAccount.this, PersonalAccount.class);
+                startActivity(intent);
+                overridePendingTransition(R.anim.enter_from_left, R.anim.exit_to_right);
+                finish();
+            } else {
+                Log.e("CreatAccount", "backArrow is null, cannot set click listener");
+            }
+        });
 
         // 接收從 PersonalAccount 傳遞的帳號和密碼（如果有）
         Intent intent = getIntent();
@@ -70,7 +98,6 @@ public class CreatAccount extends AppCompatActivity {
                 return;
             }
 
-            // 檢查信箱格式是否有效
             if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
                 editTextEmail.setError("請輸入有效的信箱地址");
                 editTextEmail.requestFocus();
@@ -78,44 +105,40 @@ public class CreatAccount extends AppCompatActivity {
             }
 
             if (newPassword.isEmpty()) {
-                editTextNewPassword.setError("密碼不能為空白");
+                textInputLayoutNewPassword.setError("密碼不能為空白");
                 editTextNewPassword.requestFocus();
                 return;
             }
 
-            // 檢查密碼長度是否至少 6 個字符
             if (newPassword.length() < 6) {
-                editTextNewPassword.setError("密碼長度至少需要 6 個字符");
+                textInputLayoutNewPassword.setError("密碼長度至少需要 6 個字符");
                 editTextNewPassword.requestFocus();
                 return;
             }
 
             if (confirmPassword.isEmpty()) {
-                editTextConfirmPassword.setError("請再次確認密碼");
+                textInputLayoutConfirmPassword.setError("請再次確認密碼");
                 editTextConfirmPassword.requestFocus();
                 return;
             }
 
-            // 檢查密碼是否一致
             if (!newPassword.equals(confirmPassword)) {
-                editTextConfirmPassword.setError("兩次輸入的密碼不一致");
+                textInputLayoutConfirmPassword.setError("兩次輸入的密碼不一致");
                 editTextConfirmPassword.requestFocus();
                 return;
             }
 
-            // 使用 RegisterDatabaseHelper 執行註冊
             RegisterDatabaseHelper.RegistrationResult result = dbHelper.registerUser(newUsername, email, newPassword);
             if (result.success) {
                 Toast.makeText(CreatAccount.this, "Registration successful! Your ID: " + result.id, Toast.LENGTH_LONG).show();
                 Log.d("CreatAccount", "Registration successful for " + newUsername + ", ID: " + result.id);
 
-                // 儲存登入狀態
                 SharedPreferences.Editor editor = sharedPreferences.edit();
                 editor.putString("loggedInUser", newUsername);
+                editor.putString("userId", result.id);
                 editor.putBoolean("isLoggedIn", true);
                 editor.apply();
 
-                // 跳轉回 MainActivity
                 Intent mainIntent = new Intent(CreatAccount.this, MainActivity.class);
                 startActivity(mainIntent);
                 finish();
@@ -132,7 +155,7 @@ public class CreatAccount extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (dbHelper != null) {
-            dbHelper.closeDatabase(); // Use closeDatabase() from RegisterDatabaseHelper
+            dbHelper.closeDatabase();
         }
     }
 }
