@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -56,7 +55,7 @@ import okhttp3.Response;
 public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = "RegisterDatabaseHelper";
     public static final String REGISTER_DB_NAME = "register.db";
-    private static final int DATABASE_VERSION = 7;
+    private static final int DATABASE_VERSION = 9; // 更新為版本 9
 
     public static final String TABLE_NAME = "Users";
     public static final String COL_ID = "id";
@@ -66,6 +65,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_LAST_MODIFIED = "last_modified";
     public static final String COL_IS_SYNCED = "is_synced";
     public static final String COL_SYNC_ACTION = "sync_action";
+    public static final String COL_PROFILE_IMAGE_URL = "profile_image_url";
 
     public static final String TABLE_INVITATIONS = "groupinvitations";
     public static final String COL_INVITATION_ID = "invitation_id";
@@ -80,7 +80,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_MESSAGE = "message";
     public static final String COL_TIMESTAMP = "timestamp";
     public static final String COL_IS_SYNCED_MSG = "is_synced";
-    public static final String COL_PROFILE_IMAGE_URL = "profile_image_url";
 
     private final Context context;
     private SQLiteDatabase registerDatabase;
@@ -252,6 +251,16 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             } catch (SQLiteException e) {
                 Log.e(TAG, "Error adding profile_image_url column during upgrade: " + e.getMessage());
             }
+        }
+        if (oldVersion < 8) {
+            // 假設版本 8 添加了某個功能，例如索引或其他表結構更改
+            // 在此處添加對版本 8 的升級邏輯（根據應用需求）
+            Log.d(TAG, "Upgraded to version 8: No structural changes needed");
+        }
+        if (oldVersion < 9) {
+            // 假設版本 9 添加了某個功能，例如新的欄位或索引
+            // 在此處添加對版本 9 的升級邏輯（根據應用需求）
+            Log.d(TAG, "Upgraded to version 9: No structural changes needed");
         }
     }
 
@@ -783,7 +792,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         return isAccepted;
     }
 
-    //支援離線同步，等待有網路後上傳
     public void syncPendingMessages(Context context) {
         SQLiteDatabase db = getRegisterDatabase();
         Cursor cursor = db.query(TABLE_MESSAGES,
@@ -1104,7 +1112,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                 .build();
 
-        String fullUrl = SERVER_URL + "/fetch_user.php";
+        String fullUrl = SERVER_URL + "/fetch_users.php";
         Log.d(TAG, "從以下位置獲取用戶: " + fullUrl);
 
         Request request = new Request.Builder()
@@ -1201,7 +1209,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         List<Invitation> invitations = new ArrayList<>();
         SQLiteDatabase db = getRegisterDatabase();
         String selection = COL_INVITED_USER + " = ? AND " + COL_STATUS + " = ?";
-        String[] selectionArgs = {userId != null ? userId : "", "pending"}; // 處理 null userId
+        String[] selectionArgs = {userId != null ? userId : "", "pending"};
         Cursor cursor = db.query(TABLE_INVITATIONS, null, selection, selectionArgs, null, null, null);
         while (cursor.moveToNext()) {
             String invitationId = cursor.getString(cursor.getColumnIndexOrThrow(COL_INVITATION_ID));
@@ -1400,6 +1408,7 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             cursor.close();
         }
     }
+
     public boolean isMessageExists(String messageId) {
         SQLiteDatabase db = getRegisterDatabase();
         Cursor cursor = db.query(TABLE_MESSAGES,
@@ -1411,7 +1420,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         cursor.close();
         return exists;
     }
-
 
     private void fetchAndMergeInvitationsFromServer() throws IOException, JSONException {
         if (!isNetworkAvailable()) {
@@ -1487,8 +1495,6 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    // 新增 deleteUser 方法
-    // 在 RegisterDatabaseHelper.java 中更新 deleteUser 方法
     public boolean deleteUser(String userId) {
         SQLiteDatabase db = getRegisterDatabase();
         db.beginTransaction();
@@ -1496,11 +1502,10 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             int rowsAffected = db.delete(TABLE_NAME, COL_ID + "=?", new String[]{userId});
             if (rowsAffected > 0) {
                 Log.d(TAG, "成功刪除用戶ID: " + userId);
-                // 可選：同步至伺服器
                 ContentValues values = new ContentValues();
                 values.put(COL_SYNC_ACTION, "delete");
                 values.put(COL_IS_SYNCED, 0);
-                db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_IGNORE); // 記錄刪除操作
+                db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_IGNORE);
                 db.setTransactionSuccessful();
                 return true;
             } else {
@@ -1518,8 +1523,8 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
     public String getUserAvatarUrl(String userId) {
         if (userId == null) return null;
         SQLiteDatabase db = getReadableDatabase();
-        Cursor cursor = db.query(TABLE_NAME, // Use TABLE_NAME ("Users")
-                new String[]{COL_PROFILE_IMAGE_URL}, // Use COL_PROFILE_IMAGE_URL ("profile_image_url")
+        Cursor cursor = db.query(TABLE_NAME,
+                new String[]{COL_PROFILE_IMAGE_URL},
                 COL_ID + " = ?",
                 new String[]{userId},
                 null, null, null);
@@ -1591,5 +1596,22 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
 
     public static String getServerUrl() {
         return SERVER_URL;
+    }
+
+    public void logDatabaseContent() {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query("Users", null, null, null, null, null, null);
+        Log.d("RegisterDatabaseHelper", "本地用戶資料庫內容：");
+        if (cursor.getCount() == 0) {
+            Log.d("RegisterDatabaseHelper", "本地資料庫為空");
+        } else {
+            while (cursor.moveToNext()) {
+                String id = cursor.getString(cursor.getColumnIndexOrThrow("id"));
+                String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
+                String password = cursor.getString(cursor.getColumnIndexOrThrow("password"));
+                Log.d("RegisterDatabaseHelper", "用戶ID: " + id + ", 用戶名: " + username + ", 密碼: " + password);
+            }
+        }
+        cursor.close();
     }
 }
