@@ -830,35 +830,24 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                     .post(requestBody)
                     .build();
 
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.e("RegisterDatabaseHelper", "Failed to sync message: " + e.getMessage());
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        try {
-                            String responseData = response.body().string();
-                            JSONObject jsonResponse = new JSONObject(responseData);
-                            if (jsonResponse.getBoolean("success")) {
-                                updateMessageSyncStatus(messageId, 1);
-                                Log.d("RegisterDatabaseHelper", "Message synced: ID=" + messageId);
-                            } else {
-                                Log.e("RegisterDatabaseHelper", "Server error: " + jsonResponse.optString("message", "未知錯誤"));
-                            }
-                        } catch (JSONException e) {
-                            Log.e("RegisterDatabaseHelper", "JSON parse error: " + e.getMessage());
-                        }
+            try (Response response = client.newCall(request).execute()) {
+                String responseData = response.body().string();
+                Log.d("RegisterDatabaseHelper", "Server response: " + responseData);
+                if (response.isSuccessful()) {
+                    JSONObject jsonResponse = new JSONObject(responseData);
+                    if (jsonResponse.getBoolean("success")) {
+                        int isSynced = jsonResponse.optInt("is_synced", 0);
+                        updateMessageSyncStatus(messageId, isSynced);
+                        Log.d("RegisterDatabaseHelper", "Message synced: ID=" + messageId + ", is_synced=" + isSynced);
                     } else {
-                        Log.e("RegisterDatabaseHelper", "Server error: " + response.code());
+                        Log.e("RegisterDatabaseHelper", "Server error: " + jsonResponse.optString("message", "Unknown error"));
                     }
-                    response.close();
+                } else {
+                    Log.e("RegisterDatabaseHelper", "Server error: " + response.code());
                 }
-            });
-        } catch (JSONException e) {
-            Log.e("RegisterDatabaseHelper", "JSON error: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            Log.e("RegisterDatabaseHelper", "Error syncing message: " + e.getMessage());
         }
     }
 
@@ -1318,17 +1307,13 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    public void updateMessageSyncStatus(String messageId, int syncStatus) {
-        SQLiteDatabase db = getRegisterDatabase();
+    public void updateMessageSyncStatus(String messageId, int isSynced) {
+        SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put(COL_IS_SYNCED_MSG, syncStatus);
-
-        int rowsUpdated = db.update(TABLE_MESSAGES, values, COL_MESSAGE_ID + " = ?", new String[]{messageId});
-        if (rowsUpdated > 0) {
-            Log.d(TAG, "已更新訊息ID: " + messageId + "的同步狀態為 " + syncStatus);
-        } else {
-            Log.e(TAG, "更新訊息ID: " + messageId + "的同步狀態失敗");
-        }
+        values.put("is_synced", isSynced);
+        int rows = db.update("messages", values, "message_id = ?", new String[]{messageId});
+        Log.d("RegisterDatabaseHelper", "Updated sync status for message_id: " + messageId + ", rows affected: " + rows);
+        db.close();
     }
 
     public String getPendingInvitationId(String userId, String groupName) {
@@ -1354,8 +1339,8 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = getRegisterDatabase();
         Cursor cursor = db.query(TABLE_INVITATIONS, null, COL_IS_SYNCED_INV + " = 0", null, null, null, null);
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
                 .build();
 
         db.beginTransaction();
@@ -1371,34 +1356,48 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                     continue;
                 }
 
-                JSONObject jsonBody = new JSONObject();
-                jsonBody.put(COL_INVITATION_ID, invitationId);
-                jsonBody.put(COL_GROUP_NAME, groupName);
-                jsonBody.put(COL_INVITED_USER, invitedUser);
-                jsonBody.put(COL_STATUS, status);
+                int retryCount = 0;
+                final int maxRetries = 3;
+                while (retryCount < maxRetries) {
+                    try {
+                        JSONObject jsonBody = new JSONObject();
+                        jsonBody.put(COL_INVITATION_ID, invitationId);
+                        jsonBody.put(COL_GROUP_NAME, groupName);
+                        jsonBody.put(COL_INVITED_USER, invitedUser);
+                        jsonBody.put(COL_STATUS, status);
+                        Log.d(TAG, "上傳邀請 JSON: " + jsonBody.toString());
 
-                RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
-                Request request = new Request.Builder()
-                        .url(SERVER_URL + "/sync_invitations.php")
-                        .post(requestBody)
-                        .build();
+                        RequestBody requestBody = RequestBody.create(jsonBody.toString(), MediaType.parse("application/json"));
+                        Request request = new Request.Builder()
+                                .url(SERVER_URL + "/sync_invitations.php")
+                                .post(requestBody)
+                                .build();
 
-                try (Response response = client.newCall(request).execute()) {
-                    if (response.isSuccessful()) {
-                        String responseData = response.body().string();
-                        JSONObject jsonResponse = new JSONObject(responseData);
-                        if (jsonResponse.getBoolean("success")) {
-                            Log.d(TAG, "成功上傳邀請ID: " + invitationId);
-                            ContentValues values = new ContentValues();
-                            values.put(COL_IS_SYNCED_INV, 1);
-                            db.update(TABLE_INVITATIONS, values, COL_INVITATION_ID + " = ?", new String[]{invitationId});
-                        } else {
-                            Log.e(TAG, "伺服器拒絕邀請ID: " + invitationId + ", 訊息: " + jsonResponse.getString("message"));
-                            throw new IOException(jsonResponse.getString("message"));
+                        try (Response response = client.newCall(request).execute()) {
+                            String responseData = response.body().string();
+                            JSONObject jsonResponse = new JSONObject(responseData);
+                            if (response.isSuccessful() && jsonResponse.getBoolean("success")) {
+                                Log.d(TAG, "成功上傳邀請ID: " + invitationId);
+                                ContentValues values = new ContentValues();
+                                values.put(COL_IS_SYNCED_INV, 1);
+                                db.update(TABLE_INVITATIONS, values, COL_INVITATION_ID + " = ?", new String[]{invitationId});
+                                break; // 成功後跳出重試循環
+                            } else {
+                                Log.e(TAG, "伺服器拒絕邀請ID: " + invitationId + ", 訊息: " + jsonResponse.optString("message", "未知錯誤"));
+                                retryCount++;
+                                if (retryCount >= maxRetries) {
+                                    throw new IOException("上傳失敗: " + jsonResponse.optString("message", "未知錯誤"));
+                                }
+                                Thread.sleep(2000 * retryCount); // 指數退避
+                            }
                         }
-                    } else {
-                        Log.e(TAG, "上傳邀請ID: " + invitationId + "失敗: " + response.code() + " - " + response.message());
-                        throw new IOException("上傳失敗: " + response.code() + " - " + response.message());
+                    } catch (Exception e) {
+                        Log.e(TAG, "上傳邀請ID: " + invitationId + " 失敗 (第 " + (retryCount + 1) + " 次): " + e.getMessage());
+                        retryCount++;
+                        if (retryCount >= maxRetries) {
+                            throw new IOException("上傳邀請ID: " + invitationId + " 在 " + maxRetries + " 次嘗試後失敗: " + e.getMessage());
+                        }
+                        //Thread.sleep(2000 * retryCount); // 指數退避
                     }
                 }
             }
@@ -1549,7 +1548,32 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
             members.add(userId);
         }
         cursor.close();
+        Log.d("RegisterDatabaseHelper", "Group members for " + groupName + ": " + members);
         return members;
+    }
+
+    public String getMessageContent(String messageId) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE_MESSAGES,
+                new String[]{COL_MESSAGE},
+                COL_MESSAGE_ID + "=?",
+                new String[]{messageId},
+                null, null, null);
+        String content = "";
+        if (cursor.moveToFirst()) {
+            content = cursor.getString(cursor.getColumnIndexOrThrow(COL_MESSAGE));
+        }
+        cursor.close();
+        Log.d("RegisterDatabaseHelper", "Fetched message content for ID=" + messageId + ": " + content);
+        return content;
+    }
+
+    public void updateMessageContent(String messageId, String newContent) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_MESSAGE, newContent);
+        int rows = db.update(TABLE_MESSAGES, values, COL_MESSAGE_ID + "=?", new String[]{messageId});
+        Log.d("RegisterDatabaseHelper", "Updated message content for ID=" + messageId + ": " + newContent + ", rows affected=" + rows);
     }
 
     public String getLastMessage(String groupName) {
@@ -1558,12 +1582,13 @@ public class RegisterDatabaseHelper extends SQLiteOpenHelper {
                 new String[]{COL_MESSAGE},
                 COL_GROUP_NAME + "=?",
                 new String[]{groupName},
-                null, null, COL_TIMESTAMP + " DESC LIMIT 1");
-        String lastMessage = "無訊息";
+                null, null, COL_TIMESTAMP + " DESC", "1");
+        String lastMessage = "";
         if (cursor.moveToFirst()) {
             lastMessage = cursor.getString(cursor.getColumnIndexOrThrow(COL_MESSAGE));
         }
         cursor.close();
+        Log.d("RegisterDatabaseHelper", "Last message for " + groupName + ": " + lastMessage);
         return lastMessage;
     }
 

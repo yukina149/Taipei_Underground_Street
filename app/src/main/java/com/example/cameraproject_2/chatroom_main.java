@@ -183,22 +183,27 @@ public class chatroom_main extends AppCompatActivity {
     }
 
     private String getGroupCreatorId(String groupName) {
-        String creatorId = sharedPreferences.getString(groupName + "_creator", null);
-        if (creatorId == null) {
-            SQLiteDatabase db = dbHelper.getRegisterDatabase();
-            Cursor cursor = db.query(RegisterDatabaseHelper.TABLE_INVITATIONS,
-                    new String[]{RegisterDatabaseHelper.COL_INVITED_USER},
-                    RegisterDatabaseHelper.COL_GROUP_NAME + "=? AND " + RegisterDatabaseHelper.COL_STATUS + "=?",
-                    new String[]{groupName, "accepted"},
-                    null, null, RegisterDatabaseHelper.COL_INVITATION_ID + " ASC LIMIT 1");
-            if (cursor.moveToFirst()) {
-                creatorId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_INVITED_USER));
-                SharedPreferences.Editor editor = sharedPreferences.edit();
-                editor.putString(groupName + "_creator", creatorId);
-                editor.apply();
-            }
-            cursor.close();
+        String creatorId = null;
+        SQLiteDatabase db = dbHelper.getRegisterDatabase();
+        // Query to find the creator of the group (assuming the creator is the first user with a specific flag or earliest record)
+        Cursor cursor = db.query(RegisterDatabaseHelper.TABLE_INVITATIONS,
+                new String[]{RegisterDatabaseHelper.COL_INVITED_USER},
+                RegisterDatabaseHelper.COL_GROUP_NAME + "=? AND " + RegisterDatabaseHelper.COL_STATUS + "=?",
+                new String[]{groupName, "accepted"},
+                null, null, RegisterDatabaseHelper.COL_INVITATION_ID + " ASC LIMIT 1");
+        if (cursor.moveToFirst()) {
+            creatorId = cursor.getString(cursor.getColumnIndexOrThrow(RegisterDatabaseHelper.COL_INVITED_USER));
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString(groupName + "_creator", creatorId);
+            editor.apply();
         }
+        cursor.close();
+
+        if (creatorId == null) {
+            Log.e("chatroom_main", "No creator found for group: " + groupName);
+            creatorId = currentUserId; // Fallback to current user ID if no creator is found
+        }
+        Log.d("chatroom_main", "Group: " + groupName + ", Creator ID: " + creatorId);
         return creatorId;
     }
 
