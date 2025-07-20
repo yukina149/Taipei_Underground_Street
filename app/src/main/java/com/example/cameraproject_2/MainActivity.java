@@ -464,11 +464,10 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
     private void captureImage() {
         Log.d("MainActivity", "開始 captureImage()");
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            Log.d("MainActivity", "相機權限未授予，請求權限");
             ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE},
+                    new String[]{Manifest.permission.CAMERA},
                     REQUEST_CAMERA_PERMISSION_CODE);
             return;
         }
@@ -679,7 +678,7 @@ public class MainActivity extends BaseActivity implements NavigationView.OnNavig
                 ImageView icon1 = view.findViewById(R.id.icon1);
                 ImageView icon2 = view.findViewById(R.id.icon2);
 
-                textView.setGravity(Gravity.LEFT);
+                textView.setGravity(Gravity.RIGHT);
                 textView.setTextSize(20);
                 textView.setTextColor(Color.BLACK);
                 textView.setTypeface(null, Typeface.BOLD);

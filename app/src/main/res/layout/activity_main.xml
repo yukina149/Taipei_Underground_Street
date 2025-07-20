@@ -92,9 +92,10 @@
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/currentLocation">
 
-                        <androidx.constraintlayout.widget.ConstraintLayout
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
                             android:layout_width="match_parent"
-                            android:layout_height="wrap_content">
+                            android:layout_height="match_parent">
 
                             <!-- 上傳照片文字，位於 CardView 內垂直居中 -->
                             <TextView
