@@ -1,10 +1,14 @@
 package com.example.cameraproject_2;
 
+import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MenuItem;
@@ -93,6 +97,8 @@ public class UploadImage extends AppCompatActivity {
             finish();
             return;
         }
+
+
 
         // Setup BottomNavigationView
         bottomNavigationView.setOnNavigationItemSelectedListener(item -> {
@@ -316,42 +322,127 @@ public class UploadImage extends AppCompatActivity {
         }
 
         Log.d("UploadImage", "處理圖片，URI: " + photoUri.toString());
+
+// 創建並顯示進度提示框
+        ProgressDialog progressDialog = new ProgressDialog(this);
+        progressDialog.setMessage("正在比對中，請稍後...");
+        progressDialog.setCancelable(false); // 禁止用戶取消
+        progressDialog.show();
+
+// 使用 AsyncTask 處理圖片
+        new AsyncTask<Void, Void, Bitmap>() {
+            @Override
+            protected Bitmap doInBackground(Void... voids) {
+                try {
+                    InputStream inputStream = getContentResolver().openInputStream(photoUri);
+                    if (inputStream == null) {
+                        Log.e("UploadImage", "無法為 photoUri 打開 InputStream");
+                        runOnUiThread(() -> Toast.makeText(UploadImage.this, "無法讀取圖片", Toast.LENGTH_SHORT).show());
+                        return null;
+                    }
+
+// 解碼 Bitmap
+                    Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+                    inputStream.close();
+                    if (bitmap == null) {
+                        Log.e("UploadImage", "從 InputStream 解碼 Bitmap 失敗");
+                        runOnUiThread(() -> Toast.makeText(UploadImage.this, "無法解碼圖片", Toast.LENGTH_SHORT).show());
+                        return null;
+                    }
+
+// 檢查並校正 EXIF 方向
+                    ExifInterface exif = null;
+                    try {
+                        if (photoUri.getPath() != null) {
+                            exif = new ExifInterface(getContentResolver().openInputStream(photoUri));
+                        }
+                    } catch (IOException e) {
+                        Log.e("UploadImage", "讀取 EXIF 資訊失敗: " + e.getMessage());
+                    }
+
+                    if (exif != null) {
+                        int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+                        Log.d("UploadImage", "EXIF 方向: " + orientation);
+                        bitmap = rotateBitmapIfNeeded(bitmap, orientation);
+                    }
+
+                    return bitmap;
+                } catch (IOException e) {
+                    Log.e("UploadImage", "處理圖片錯誤: " + e.getMessage());
+                    runOnUiThread(() -> Toast.makeText(UploadImage.this, "處理圖片時出錯", Toast.LENGTH_SHORT).show());
+                    return null;
+                }
+            }
+
+            @Override
+            protected void onPostExecute(Bitmap bitmap) {
+                if (bitmap != null) {
+                    currentBitmap = bitmap;
+                    currentBitmapPath = saveBitmapToTempFile(currentBitmap);
+                    bigmap.setImageBitmap(currentBitmap);
+                    bigmap.setVisibility(View.VISIBLE);
+                    buttonUpload.setEnabled(true);
+
+// Convert Bitmap to Mat for ORB processing in a separate thread
+                    new Thread(() -> {
+                        try {
+                            Mat mat = new Mat();
+                            Utils.bitmapToMat(currentBitmap, mat);
+
+// Launch ORBActivity for image comparison
+                            Intent intent = new Intent(UploadImage.this, ORBActivity.class);
+                            intent.putExtra("imageUri", photoUri.toString());
+                            activityResultLauncher.launch(intent);
+                        } finally {
+// 確保進度提示框在 ORB 比對啟動後關閉
+                            runOnUiThread(() -> {
+                                if (progressDialog.isShowing()) {
+                                    progressDialog.dismiss();
+                                }
+                            });
+                        }
+                    }).start();
+                } else {
+// 如果圖片處理失敗，關閉進度提示框
+                    if (progressDialog.isShowing()) {
+                        progressDialog.dismiss();
+                    }
+                }
+            }
+        }.execute();
+    }
+
+
+    private Bitmap rotateBitmapIfNeeded(Bitmap bitmap, int orientation) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            Log.w("UploadImage", "Bitmap is null or recycled");
+            return null;
+        }
+
+        Matrix matrix = new Matrix();
+        switch (orientation) {
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                matrix.postRotate(90);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                matrix.postRotate(180);
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_270:
+                matrix.postRotate(270);
+                break;
+            default:
+                return bitmap;
+        }
+
         try {
-            InputStream inputStream = getContentResolver().openInputStream(photoUri);
-            if (inputStream == null) {
-                Log.e("UploadImage", "無法為 photoUri 打開 InputStream");
-                Toast.makeText(this, "無法讀取圖片", Toast.LENGTH_SHORT).show();
-                return;
+            Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+            if (rotatedBitmap != bitmap) {
+                bitmap.recycle(); // 回收原始 Bitmap
             }
-
-            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-            inputStream.close();
-            if (bitmap == null) {
-                Log.e("UploadImage", "從 InputStream 解碼 Bitmap 失敗");
-                Toast.makeText(this, "無法解碼圖片", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            currentBitmap = bitmap;
-            currentBitmapPath = saveBitmapToTempFile(currentBitmap);
-            runOnUiThread(() -> {
-                bigmap.setImageBitmap(currentBitmap);
-                bigmap.setVisibility(View.VISIBLE);
-                buttonUpload.setEnabled(true);
-            });
-
-            // Convert Bitmap to Mat for ORB processing
-            Mat mat = new Mat();
-            Utils.bitmapToMat(bitmap, mat);
-
-            // Launch ORBActivity for image comparison
-            Intent intent = new Intent(UploadImage.this, ORBActivity.class);
-            intent.putExtra("imageUri", photoUri.toString());
-            activityResultLauncher.launch(intent);
-
-        } catch (IOException e) {
-            Log.e("UploadImage", "處理圖片錯誤: " + e.getMessage());
-            Toast.makeText(this, "處理圖片時出錯", Toast.LENGTH_SHORT).show();
+            return rotatedBitmap;
+        } catch (OutOfMemoryError e) {
+            Log.e("UploadImage", "OutOfMemoryError during bitmap rotation: " + e.getMessage());
+            return bitmap; // 返回原始 Bitmap
         }
     }
 
@@ -366,7 +457,7 @@ public class UploadImage extends AppCompatActivity {
             if (!tempDir.exists()) tempDir.mkdirs();
             File tempFile = File.createTempFile("bitmap_", ".png", tempDir);
             try (FileOutputStream out = new FileOutputStream(tempFile)) {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+                bitmap.compress(Bitmap.CompressFormat.PNG, 80, out); // 降低壓縮質量
                 out.flush();
             }
             return tempFile.getAbsolutePath();
