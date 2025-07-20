@@ -102,7 +102,8 @@
             android:exported="false" />
         <activity
             android:name=".MainActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity
             android:name=".MapActivity"
             android:exported="false" />
