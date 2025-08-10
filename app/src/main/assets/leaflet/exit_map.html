@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>台北捷運出口設施地圖</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; }
+    .locate-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class="locate-btn" onclick="goToCurrentLocation()">📍 回到定位</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  const lineColors = {
+      "板南線": "blue",
+      "淡水信義線": "red",
+      "松山新店線": "green",
+      "中和新蘆線": "orange",
+      "文湖線": "brown",
+      "環狀線":"yellow"
+  };
+
+  let map;
+  let userMarker;
+  let mrtMarkers = []; // *** 新增：用於儲存所有捷運出口的標記點 ***
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', 'mrt_exit_data.json', true);
+  xhr.overrideMimeType("application/json");
+
+  xhr.onload = function () {
+      if (xhr.readyState === 4 && (xhr.status === 200 || xhr.status === 0)) {
+          try {
+              const data = JSON.parse(xhr.responseText);
+              console.log("JSON data loaded successfully via XHR:", data);
+
+              map = L.map('map').setView([25.0478, 121.5170], 12);
+
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                  maxZoom: 19,
+                  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              }).addTo(map);
+
+              // *** 監聽地圖縮放結束事件 ***
+              map.on('zoomend', function() {
+                  updateMarkerSizes();
+              });
+
+              goToCurrentLocation(true);
+
+              if (data && Array.isArray(data)) {
+                  data.forEach(item => {
+                      const line = item.路線 && item.路線[0] ? item.路線[0] : "其他";
+                      const color = lineColors[line] || "gray";
+                      const lat = parseFloat(item.緯度);
+                      const lng = parseFloat(item.經度);
+
+                      if (!isNaN(lat) && !isNaN(lng)) {
+                          // *** 初始半徑可以先設定一個基準值，或者直接呼叫 calculateRadius ***
+                          const initialRadius = calculateRadius(map.getZoom());
+                          const marker = L.circleMarker([lat, lng], {
+                              radius: initialRadius, // 使用計算後的初始半徑
+                              color: color,
+                              fillOpacity: 0.9
+                          }).addTo(map);
+
+                          marker.bindPopup(`
+                              <b>${item.站名 || 'N/A'} ${item.出口編號標準 || ''}</b><br>
+                              電梯/無障礙坡道：${item['電梯/無障礙坡道'] || '未知'}<br>
+                              電扶梯：${item.電扶梯 || '未知'}<br>
+                              路線：${item.路線 ? item.路線.join(", ") : "未知"}
+                          `);
+                          mrtMarkers.push(marker); // *** 將創建的 marker 加入陣列 ***
+                      } else {
+                          console.warn("Invalid coordinates for item:", item);
+                      }
+                  });
+                  console.log("MRT markers added. Count:", mrtMarkers.length);
+                  // *** 初始化時也更新一次大小，確保初始視圖的 marker 大小正確 ***
+                  updateMarkerSizes();
+              } else {
+                  console.error("Parsed JSON data is not a valid array:", data);
+                  displayErrorOnMap("地圖資料格式錯誤。");
+              }
+
+          } catch (e) {
+              console.error("Error parsing JSON or initializing map:", e);
+              displayErrorOnMap("地圖資料解析或初始化錯誤: " + e.message);
+          }
+      } else {
+          console.error("Error loading mrt_exit_data.json via XHR. Status:", xhr.status, xhr.statusText);
+          displayErrorOnMap("無法載入捷運出口資料 (狀態: " + xhr.status + ")");
+      }
+  };
+
+  xhr.onerror = function () {
+      console.error("XHR request failed for mrt_exit_data.json. Network error.");
+      displayErrorOnMap("載入捷運出口資料時發生網路錯誤。");
+  };
+
+  xhr.send(null);
+
+  // *** 新增：根據縮放級別計算標記點半徑的函數 ***
+  function calculateRadius(zoomLevel) {
+      // 這是一個範例邏輯，你可以根據需要調整
+      // zoomLevel 越小 (地圖看得越遠)，半徑越小
+      // zoomLevel 越大 (地圖看得越近)，半徑越大
+      if (zoomLevel < 11) return 2;
+      if (zoomLevel < 13) return 3;
+      if (zoomLevel < 15) return 5;
+      if (zoomLevel < 17) return 7;
+      if (zoomLevel < 19) return 9;
+      return 10; // 最大縮放級別或預設
+  }
+
+  // *** 新增：更新所有 MRT 標記點大小的函數 ***
+  function updateMarkerSizes() {
+      if (!map) return; // 確保 map 物件存在
+      const currentZoom = map.getZoom();
+      const newRadius = calculateRadius(currentZoom);
+      console.log(`Zoom level: ${currentZoom}, New radius: ${newRadius}`);
+      mrtMarkers.forEach(marker => {
+          marker.setRadius(newRadius);
+      });
+  }
+
+  function goToCurrentLocation(isInitial = false) {
+      console.log("goToCurrentLocation called. isInitial:", isInitial);
+      if (!map) {
+          console.warn("Map not initialized yet. Cannot go to current location.");
+          if(!isInitial) alert("地圖尚未準備好，請稍候再試。");
+          return;
+      }
+
+      if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function(position) {
+              const lat = position.coords.latitude;
+              const lng = position.coords.longitude;
+              console.log("Current position:", lat, lng);
+
+              map.setView([lat, lng], isInitial ? 17 : 18);
+              if (userMarker) {
+                  userMarker.setLatLng([lat, lng]);
+              } else {
+                  userMarker = L.marker([lat, lng])
+                      .addTo(map)
+                      .bindPopup("您目前的位置")
+                      .openPopup();
+              }
+              // 定位或視圖改變後，也可能需要更新標記大小（如果縮放級別變化了）
+              // zoomend 事件應該會處理這個，但如果 setView 導致 zoom 變化，可以考慮也調用 updateMarkerSizes()
+              // 不過通常 zoomend 已經足夠
+          }, function(error) {
+              console.error("Geolocation error:", error);
+              // Toast.makeText(this, "定位失敗：" + error.message, Toast.LENGTH_SHORT).show();
+          }, {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0
+          });
+      } else {
+          console.error("此裝置不支援定位 (navigator.geolocation is not available).");
+      }
+  }
+
+  function displayErrorOnMap(message) {
+      const mapDiv = document.getElementById('map');
+      if (mapDiv) {
+          mapDiv.innerHTML = `<p style="color:red; text-align:center; padding: 20px;">${message}</p>`;
+      }
+  }
+
+</script>
+
+</body>
+</html>
