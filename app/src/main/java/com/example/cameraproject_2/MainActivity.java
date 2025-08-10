@@ -175,7 +175,19 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 startActivity(intent);
             }
         });
-
+        // 找到捷運出口地圖的 CardView 並設定點擊事件
+        CardView cardExitMap = findViewById(R.id.cardExitMap);
+        if (cardExitMap != null) {
+            cardExitMap.setOnClickListener(v -> {
+                // 建立一個從 MainActivity 到 ExitMapActivity 的 Intent
+                Intent intent = new Intent(MainActivity.this, ExitMapActivity.class);
+                // 啟動新的 Activity
+                startActivity(intent);
+            });
+        } else {
+            // 如果找不到該元件，在日誌中印出錯誤，方便除錯
+            Log.e("MainActivity", "cardExitMap not found in layout");
+        }
         //調用orb location
         // 初始化 ActivityResultLauncher
         startOrbActivityLauncher = registerForActivityResult(

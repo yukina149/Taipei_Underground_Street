@@ -13,6 +13,11 @@
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- 8/10新增 請求定位 -->
+    <!-- 關鍵：精確位置權限 (navigator.geolocation 需要) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- 可選：粗略位置權限 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <meta-data
         android:name="com.google.ar.core"
@@ -63,6 +68,9 @@
             </intent-filter>
             -->
         </activity>
+        <!--8/10新增 捷運站出口地圖的activity檔 ExitMapActivity.java -->
+        <activity android:name=".ExitMapActivity" />
+        
         <meta-data
             android:name="com.google.ar.core"
             android:value="required" />

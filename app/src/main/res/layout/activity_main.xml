@@ -337,6 +337,29 @@
                                     android:textStyle="bold" />
                             </RelativeLayout>
                         </androidx.cardview.widget.CardView>
+                    <!--8/10-->
+                        <androidx.cardview.widget.CardView
+                            android:id="@+id/cardExitMap"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_margin="15dp"
+                            android:layout_weight="1">
+
+                            <RelativeLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="10dp"
+                                    android:text="捷運出口地圖"
+                                    android:textColor="@color/color_gray"
+
+                                    android:textSize="20sp"
+                                    android:textStyle="bold" />
+                            </RelativeLayout>
+                        </androidx.cardview.widget.CardView>
                     </LinearLayout>
                     <TextView
                         android:layout_width="517dp"
