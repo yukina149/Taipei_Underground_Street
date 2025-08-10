@@ -1,31 +1,69 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <!--檔案說明: 使用leaflet 讀取整理好的json檔案 把捷運站出口座標轉換成地圖標記點 然後可以查看出口設施-->
   <meta charset="utf-8" />
   <title>台北捷運出口設施地圖</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <!-- *** 引入 Leaflet.Locate 插件的 CSS *** -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol/dist/L.Control.Locate.min.css" />
   <style>
-    #map { height: 100vh; }
-    .locate-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      font-size: 14px;
+    html, body, #map {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* 防止滾動條出現 */
     }
+
+    /* 調整 目前定位 Leaflet.Locate 按鈕大小和樣式 *** */
+    .leaflet-control-locate.leaflet-control {
+        width: 50px !important;   /* 整個按鈕的寬度 */
+        height: 50px !important;  /* 整個按鈕的高度 */
+        border-radius: 8px !important; /* 方框圓角 */
+    }
+    /**/
+    .leaflet-control-locate a {
+        /* 讓 <a> 標籤填充整個按鈕區域，以便更好地控制圖示居中 */
+        display: flex !important;
+        align-items: center !important; /* 垂直居中 */
+        justify-content: center !important; /* 水平居中 */
+        width: 100% !important;   /* 寬度充滿父元素 (按鈕) */
+        height: 100% !important;  /* 高度充滿父元素 (按鈕) */
+        font-size: 22px !important; /* 調整圖示大小 (如果是字型圖示) */
+                                    /* 如果是SVG，下面的SVG樣式會更重要 */
+        line-height: normal !important; /* 重置line-height，避免影響flex居中 */
+    }
+
+    /* 針對 Leaflet.Locate 插件內部可能使用的 SVG 圖示進行調整 */
+    .leaflet-control-locate a .leaflet-control-locate-icon svg,
+    .leaflet-control-locate a svg.icon-locate { /* 插件可能使用的不同SVG class */
+        width: 28px !important;   /* 調整SVG圖示的寬度 */
+        height: 28px !important;  /* 調整SVG圖示的高度 */
+        margin: auto !important;  /* 確保SVG在<a>內也居中 (雙重保險) */
+    }
+
+    /* 如果定位處於活動/加載狀態，插件可能會改變圖示 (例如旋轉的spinner) */
+    .leaflet-control-locate.active a .leaflet-control-locate-icon svg,
+    .leaflet-control-locate.requesting a .leaflet-control-locate-icon svg,
+    .leaflet-control-locate.active a svg.icon-locate,
+    .leaflet-control-locate.requesting a svg.icon-locate {
+        width: 28px !important; /* 確保活動狀態的SVG大小一致 */
+        height: 28px !important;
+    }
+
   </style>
+
 </head>
 <body>
 
 <div id="map"></div>
-<div class="locate-btn" onclick="goToCurrentLocation()">📍 回到定位</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<!-- *** 引入 Leaflet.Locate 插件的 JS *** -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol/dist/L.Control.Locate.min.js"></script>
 <script>
   const lineColors = {
       "板南線": "blue",
@@ -37,10 +75,12 @@
   };
 
   let map;
-  let userMarker;
-  let mrtMarkers = []; // *** 新增：用於儲存所有捷運出口的標記點 ***
+  // let userMarker; // Leaflet.Locate 會自己處理定位標記
+  let mrtMarkers = [];
+  let locateControl; // 用於保存定位控制元件的實例
 
   var xhr = new XMLHttpRequest();
+  //獲取json檔案資料
   xhr.open('GET', 'mrt_exit_data.json', true);
   xhr.overrideMimeType("application/json");
 
@@ -50,50 +90,102 @@
               const data = JSON.parse(xhr.responseText);
               console.log("JSON data loaded successfully via XHR:", data);
 
-              map = L.map('map').setView([25.0478, 121.5170], 12);
+              map = L.map('map', {
+                  // zoomControl: false // 如果你想完全自訂縮放控制項，可以禁用預設的
+              });
+
+              // 在定位成功前初始的顯示地圖位置 經緯度,地圖縮放程度
+              map.setView([25.0478, 121.5170], 14);
+
 
               L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                  maxZoom: 19,
+                  maxZoom: 19, // 插件的 flyTo 和 setView 會遵守這個
                   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               }).addTo(map);
 
-              // *** 監聽地圖縮放結束事件 ***
               map.on('zoomend', function() {
                   updateMarkerSizes();
               });
 
-              goToCurrentLocation(true);
+              // 初始 當前位置按鈕
+              locateControl = L.control.locate({
+                  position: 'bottomright', //按鈕放在右下角
+                  setView: 'untilPanOrZoom', // 定位後設定視圖，直到用戶平移或縮放
+                  flyTo: true,          // 使用 flyTo 動畫效果
+                  keepCurrentZoomLevel: false, // 定位時不保持當前縮放級別，會使用下面的 initialZoomLevel
+                  initialZoomLevel: 18,    // 定位成功後的預設縮放級別
+                  locateOptions: {
+                      maxZoom: 18,       // 定位時 flyTo 或 setView 的最大縮放級別
+                      enableHighAccuracy: true,
+                      watch: true,       // 持續追蹤位置 (可選)
+                      timeout: 15000,    // 增加超時時間
+                      maximumAge: 5000   // *** 嘗試：使用5秒內的快取位置以可能加快初始定位 ***
+                  },
+                  strings: {
+                      title: "顯示我的位置",
+                      popup: "當前位置 (誤差 {distance} {unit})", // 定位點的 Popup 內容
+                      metersUnit: "公尺",
+                      feetUnit: "英尺",
+                      outsideMapBoundsMsg: "您似乎位於地圖邊界之外。"
+                  },
+                  onLocationError: function(e) { // 定位失敗的回調
+                      console.error("Leaflet.Locate Error:", e);
+                      // 可以考慮更友好的錯誤提示，例如在地圖上顯示訊息而不是 alert
+                      if (e.code === 1) { // PERMISSION_DENIED
+                          alert("定位失敗：您拒絕了位置權限請求。請在設定中開啟權限。");
+                      } else if (e.code === 2) { // POSITION_UNAVAILABLE
+                          alert("定位失敗：目前無法獲取位置資訊。");
+                      } else { // TIMEOUT 或其他
+                          alert("定位失敗：" + e.message);
+                      }
+                  },
+                  onLocationFound: function(e) { // 定位成功的回調
+                      console.log("Leaflet.Locate Found:", e);
+                      // 可以在這裡做一些定位成功後額外的事情，如果需要
+                      // 例如，插件會自動設定視圖和標記
+                  }
+              }).addTo(map);
 
+              // *** 頁面載入後自動啟動定位 ***
+              // 我們希望在捷運資料載入後，地圖準備好後再啟動定位
+              // locateControl.start(); // 這會顯示定位圖示並開始定位
+
+            //抓取站對應到的捷運路線 對應到上面lineColors寫好的路線顏色(其他的設為灰色)
               if (data && Array.isArray(data)) {
                   data.forEach(item => {
                       const line = item.路線 && item.路線[0] ? item.路線[0] : "其他";
                       const color = lineColors[line] || "gray";
                       const lat = parseFloat(item.緯度);
                       const lng = parseFloat(item.經度);
-
+                     //捷運站的出口點標記
                       if (!isNaN(lat) && !isNaN(lng)) {
-                          // *** 初始半徑可以先設定一個基準值，或者直接呼叫 calculateRadius ***
                           const initialRadius = calculateRadius(map.getZoom());
                           const marker = L.circleMarker([lat, lng], {
-                              radius: initialRadius, // 使用計算後的初始半徑
+                              radius: initialRadius,
                               color: color,
                               fillOpacity: 0.9
                           }).addTo(map);
-
+                      //捷運站出口的資訊框(抓取json的資料檔案)
                           marker.bindPopup(`
                               <b>${item.站名 || 'N/A'} ${item.出口編號標準 || ''}</b><br>
                               電梯/無障礙坡道：${item['電梯/無障礙坡道'] || '未知'}<br>
                               電扶梯：${item.電扶梯 || '未知'}<br>
                               路線：${item.路線 ? item.路線.join(", ") : "未知"}
                           `);
-                          mrtMarkers.push(marker); // *** 將創建的 marker 加入陣列 ***
+                          mrtMarkers.push(marker);
                       } else {
                           console.warn("Invalid coordinates for item:", item);
                       }
                   });
                   console.log("MRT markers added. Count:", mrtMarkers.length);
-                  // *** 初始化時也更新一次大小，確保初始視圖的 marker 大小正確 ***
-                  updateMarkerSizes();
+                  updateMarkerSizes(); // 更新一次所有標記的大小
+
+                  // *** 在捷運標記和地圖都準備好後，啟動初始定位 ***
+                  console.log("Attempting to start initial location.");
+                  if (map && locateControl) { // 確保地圖和控制項都已初始化
+                    locateControl.start();
+                  }
+
               } else {
                   console.error("Parsed JSON data is not a valid array:", data);
                   displayErrorOnMap("地圖資料格式錯誤。");
@@ -116,67 +208,27 @@
 
   xhr.send(null);
 
-  // *** 新增：根據縮放級別計算標記點半徑的函數 ***
+//縮放程度影響圓型標記點的半徑大小
+//zoomLevel: 用戶縮放大小
+//zoomLevel越小代表看到的範圍越大 點也跟著縮小
+//zoomLevel越大代表看到的範圍越小 點也跟著放大
   function calculateRadius(zoomLevel) {
-      // 這是一個範例邏輯，你可以根據需要調整
-      // zoomLevel 越小 (地圖看得越遠)，半徑越小
-      // zoomLevel 越大 (地圖看得越近)，半徑越大
       if (zoomLevel < 11) return 2;
       if (zoomLevel < 13) return 3;
       if (zoomLevel < 15) return 5;
       if (zoomLevel < 17) return 7;
       if (zoomLevel < 19) return 9;
-      return 10; // 最大縮放級別或預設
+      return 10; //預設大小
   }
 
-  // *** 新增：更新所有 MRT 標記點大小的函數 ***
   function updateMarkerSizes() {
-      if (!map) return; // 確保 map 物件存在
+      if (!map) return;
       const currentZoom = map.getZoom();
-      const newRadius = calculateRadius(currentZoom);
-      console.log(`Zoom level: ${currentZoom}, New radius: ${newRadius}`);
+      const newRadius = calculateRadius(currentZoom); //把上面得到的當前縮放程度回傳給 calculateRadius
+      // console.log(`Zoom: ${currentZoom}, Radius: ${newRadius}`); // 用於偵錯
       mrtMarkers.forEach(marker => {
           marker.setRadius(newRadius);
       });
-  }
-
-  function goToCurrentLocation(isInitial = false) {
-      console.log("goToCurrentLocation called. isInitial:", isInitial);
-      if (!map) {
-          console.warn("Map not initialized yet. Cannot go to current location.");
-          if(!isInitial) alert("地圖尚未準備好，請稍候再試。");
-          return;
-      }
-
-      if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(function(position) {
-              const lat = position.coords.latitude;
-              const lng = position.coords.longitude;
-              console.log("Current position:", lat, lng);
-
-              map.setView([lat, lng], isInitial ? 17 : 18);
-              if (userMarker) {
-                  userMarker.setLatLng([lat, lng]);
-              } else {
-                  userMarker = L.marker([lat, lng])
-                      .addTo(map)
-                      .bindPopup("您目前的位置")
-                      .openPopup();
-              }
-              // 定位或視圖改變後，也可能需要更新標記大小（如果縮放級別變化了）
-              // zoomend 事件應該會處理這個，但如果 setView 導致 zoom 變化，可以考慮也調用 updateMarkerSizes()
-              // 不過通常 zoomend 已經足夠
-          }, function(error) {
-              console.error("Geolocation error:", error);
-              // Toast.makeText(this, "定位失敗：" + error.message, Toast.LENGTH_SHORT).show();
-          }, {
-              enableHighAccuracy: true,
-              timeout: 10000,
-              maximumAge: 0
-          });
-      } else {
-          console.error("此裝置不支援定位 (navigator.geolocation is not available).");
-      }
   }
 
   function displayErrorOnMap(message) {
@@ -190,3 +242,4 @@
 
 </body>
 </html>
+
