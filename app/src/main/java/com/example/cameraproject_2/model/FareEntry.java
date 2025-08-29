@@ -1,30 +1,46 @@
 package com.example.cameraproject_2.model;
 import com.google.gson.annotations.SerializedName;
+import androidx.room.ColumnInfo;
+import androidx.room.Embedded; // 用於 ImportDateInfo
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+import androidx.room.TypeConverters; // 如果使用 TypeConverter
 
+@Entity(tableName = "fare_entries") // 定義資料表名稱
 public class FareEntry {
-    @SerializedName("_id")
-    private int id;
 
+    @PrimaryKey // Room 需要主鍵
+    @SerializedName("_id")
+    private int id; // 這個 id 應該是唯一的，來自 API
+
+    @Embedded // 將 ImportDateInfo 的欄位嵌入到 FareEntry 表中
     @SerializedName("_importdate")
     private ImportDateInfo importDate;
 
+    @ColumnInfo(name = "from_station") // 可以為欄位指定名稱
     @SerializedName("起站")
     private String fromStation;
 
+    @ColumnInfo(name = "to_station")
     @SerializedName("訖站")
     private String toStation;
 
+    @ColumnInfo(name = "full_fare")
     @SerializedName("全票票價")
     private String fullFare;
 
+    @ColumnInfo(name = "concession_fare")
     @SerializedName("敬老卡愛心卡愛心陪伴卡及新北市兒童優惠票價")
     private String concessionFare;
 
+    @ColumnInfo(name = "taipei_child_fare")
     @SerializedName("臺北市兒童優惠票價")
     private String taipeiChildFare;
 
+    @ColumnInfo(name = "distance")
     @SerializedName("距離")
     private String distance;
+    public FareEntry() {}
 
     // Getters and Setters
     public int getId() { return id; }

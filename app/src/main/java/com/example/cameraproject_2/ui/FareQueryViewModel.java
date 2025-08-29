@@ -1,22 +1,32 @@
 package com.example.cameraproject_2.ui;
 
+import android.app.Application; // 需要 Application Context
+import android.content.Context; // 需要 Context
+import android.content.SharedPreferences; // 需要 SharedPreferences
 import android.util.Log;
+
+import androidx.core.content.ContextCompat;
+import androidx.lifecycle.AndroidViewModel; // 改為 AndroidViewModel 以獲取 Application Context
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.ViewModel;
+// import androidx.lifecycle.ViewModel; // 不再使用 ViewModel
 
-import java.io.IOException; // 需要引入
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.Locale; // For String.format
+import java.util.Locale;
+import java.util.concurrent.ExecutorService; // 用於後台執行緒
+import java.util.concurrent.Executors;   // 用於後台執行緒
 
-import com.example.cameraproject_2.model.FareEntry; // 引入你的模型
-import com.example.cameraproject_2.model.MetroApiResponse; // 引入你的模型
-import com.example.cameraproject_2.model.MetroApiResult; // 需要引入
-import com.example.cameraproject_2.network.TaipeiMetroApiService; // 引入API服務
+import com.example.cameraproject_2.model.AppDatabase; // 引入資料庫
+import com.example.cameraproject_2.model.FareEntryDao; // 引入 DAO
+import com.example.cameraproject_2.model.FareEntry;
+import com.example.cameraproject_2.model.MetroApiResponse;
+import com.example.cameraproject_2.model.MetroApiResult;
+import com.example.cameraproject_2.network.TaipeiMetroApiService;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -24,72 +34,108 @@ import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-//呼叫API資料
-public class FareQueryViewModel extends ViewModel {
+public class FareQueryViewModel extends AndroidViewModel { // *** 改為 AndroidViewModel ***
 
     private static final String TAG = "FareQueryVM";
+    private static final String PREFS_NAME = "FarePrefs";
+    private static final String KEY_LAST_UPDATE_TIMESTAMP = "lastUpdateTimestamp";
+    private static final long CACHE_EXPIRY_DURATION_MS = 24 * 60 * 60 * 1000; // 24 小時
 
+    // LiveData 保持不變
     private final MutableLiveData<List<String>> _stationList = new MutableLiveData<>();
     public final LiveData<List<String>> stationList = _stationList;
-
-    //---全票---
     private final MutableLiveData<String> _fullFareResult = new MutableLiveData<>();
     public final LiveData<String> fullFareResult = _fullFareResult;
-    //---愛心票---
     private final MutableLiveData<String> _concessionFareResult = new MutableLiveData<>();
     public final LiveData<String> concessionFareResult = _concessionFareResult;
-    //---北市兒童票---
     private final MutableLiveData<String> _taipeiChildFareResult = new MutableLiveData<>();
     public final LiveData<String> taipeiChildFareResult = _taipeiChildFareResult;
-
     private final MutableLiveData<String> _distanceResult = new MutableLiveData<>();
     public final LiveData<String> distanceResult = _distanceResult;
-
     private final MutableLiveData<Boolean> _isLoading = new MutableLiveData<>();
     public final LiveData<Boolean> isLoading = _isLoading;
-
     private final MutableLiveData<String> _errorMessage = new MutableLiveData<>();
     public final LiveData<String> errorMessage = _errorMessage;
 
-    private final List<FareEntry> allFareEntries = new ArrayList<>(); // 累積所有票價條目
+    private List<FareEntry> allFareEntries = new ArrayList<>(); // 仍然用於內存中的當前資料
     private final TaipeiMetroApiService apiService;
+    private final FareEntryDao fareEntryDao; // 資料庫 DAO
+    private final SharedPreferences sharedPreferences; // 用於儲存時間戳
+    private final ExecutorService databaseExecutor; // 用於在後台執行緒操作資料庫
 
-    private static final int API_LIMIT_PER_REQUEST = 1000; // API 每次請求的上限
+    private static final int API_LIMIT_PER_REQUEST = 1000;
     private int currentOffset = 0;
-    private boolean isLoadingAllPages = false; // 標記是否正在載入所有分頁
+    private boolean isLoadingAllPagesFromApi = false; // 與 isLoading 不同，這個專指 API 分頁載入
 
-    public FareQueryViewModel() {
-        // HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
-        // loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
-        // OkHttpClient client = new OkHttpClient.Builder()
-        //         .addInterceptor(loggingInterceptor)
-        //         .build();
+    // *** 構造函數修改 ***
+    public FareQueryViewModel(Application application) {
+        super(application); // 傳遞 Application 給 AndroidViewModel
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("https://data.taipei/")
-                // .client(client) // 如果使用 OkHttp Logging Interceptor
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
         apiService = retrofit.create(TaipeiMetroApiService.class);
-        fetchAllFareDataPages(); // 更改呼叫的方法
+
+        // 初始化資料庫和 DAO
+        AppDatabase database = AppDatabase.getDatabase(application);
+        fareEntryDao = database.fareEntryDao();
+        // 初始化 SharedPreferences
+        sharedPreferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        // 初始化用於資料庫操作的執行緒池
+        databaseExecutor = Executors.newSingleThreadExecutor();
+
+        loadFareData(); // 啟動時載入資料 (會先檢查快取)
     }
 
-    private void fetchAllFareDataPages() {
-        if (isLoadingAllPages) {
-            return; // 如果已經在載入，則不重複執行
-        }
+    private void loadFareData() {
         _isLoading.setValue(true);
         _errorMessage.setValue(null);
-        allFareEntries.clear(); // 清空舊資料
-        currentOffset = 0;    // 重置位移
-        isLoadingAllPages = true; // 開始載入
-        Log.d(TAG, "Starting to fetch all fare data pages...");
-        fetchNextPage(); // 開始獲取第一頁
+
+        databaseExecutor.execute(() -> { // 在後台執行緒中操作資料庫
+            long lastUpdateTime = sharedPreferences.getLong(KEY_LAST_UPDATE_TIMESTAMP, 0);
+            boolean isCacheExpired = (System.currentTimeMillis() - lastUpdateTime) > CACHE_EXPIRY_DURATION_MS;
+            List<FareEntry> cachedEntries = null;
+
+            if (!isCacheExpired) {
+                Log.d(TAG, "Cache not expired. Trying to load from database...");
+                cachedEntries = fareEntryDao.getAllFareEntries();
+            } else {
+                Log.d(TAG, "Cache expired or first load.");
+            }
+
+            if (cachedEntries != null && !cachedEntries.isEmpty()) {
+                Log.d(TAG, "Loaded " + cachedEntries.size() + " entries from database cache.");
+                allFareEntries.clear();
+                allFareEntries.addAll(cachedEntries);
+                ContextCompat.getMainExecutor(getApplication()).execute(this::processLoadedData);
+            } else {
+                Log.d(TAG, "No valid cache found or cache expired. Fetching from API.");
+                // 需要在主執行緒中觸發 API 請求的 loading 狀態 (如果 fetchAllFareDataPages 內部處理了就不用)
+                // getApplication().getMainExecutor().execute(() -> _isLoading.setValue(true));
+                fetchAllFareDataPagesFromApi(); // 從 API 獲取
+            }
+        });
     }
 
-    private void fetchNextPage() {
-        Log.d(TAG, "Fetching page with offset: " + currentOffset + ", limit: " + API_LIMIT_PER_REQUEST);
-        // 注意：你需要修改 TaipeiMetroApiService 介面以接受 offset 和 limit
+
+    private void fetchAllFareDataPagesFromApi() {
+        if (isLoadingAllPagesFromApi) {
+            return;
+        }
+        // _isLoading.setValue(true); // 這個應該在 loadFareData 開始時設定，或者在這裡再次確認
+        allFareEntries.clear();
+        currentOffset = 0;
+        isLoadingAllPagesFromApi = true;
+        Log.d(TAG, "Starting to fetch all fare data pages from API...");
+        // 確保 fetchNextPageFromApi 是在主執行緒發起 Retrofit 請求 (Retrofit callback 會切回主執行緒)
+        ContextCompat.getMainExecutor(getApplication()).execute(this::fetchNextPageFromApi);
+    }
+
+    private void fetchNextPageFromApi() {
+        // isLoading 狀態應由 loadFareData 或 fetchAllFareDataPagesFromApi 開始時設定
+        // 在這裡主要是網路請求本身
+        Log.d(TAG, "Fetching page from API with offset: " + currentOffset + ", limit: " + API_LIMIT_PER_REQUEST);
         apiService.getMetroFares(API_LIMIT_PER_REQUEST, currentOffset).enqueue(new Callback<MetroApiResponse>() {
             @Override
             public void onResponse(Call<MetroApiResponse> call, Response<MetroApiResponse> response) {
@@ -98,76 +144,92 @@ public class FareQueryViewModel extends ViewModel {
                     List<FareEntry> currentPageEntries = result.getFareEntries();
 
                     if (currentPageEntries != null && !currentPageEntries.isEmpty()) {
-                        allFareEntries.addAll(currentPageEntries);
-                        Log.d(TAG, "Fetched " + currentPageEntries.size() + " entries. Total entries now: " + allFareEntries.size());
-
-                        // 檢查是否還有更多資料
-                        // 假設 MetroApiResult 中有 count 欄位 (根據常見的 data.taipei API 格式)
-                        // 你需要確認你的 MetroApiResult POJO 中是否有 @SerializedName("count") private int count;
-                        // 並且為它添加 getter: public int getCount() { return count; }
-                        int totalCount = result.getCount(); // <<<<< 假設你的 POJO 有這個欄位和方法
-                        Log.d(TAG, "API reports total count: " + totalCount);
-
-
+                        allFareEntries.addAll(currentPageEntries); // 先累加到內存列表
+                        int totalCount = result.getCount();
                         if (allFareEntries.size() < totalCount && currentPageEntries.size() == API_LIMIT_PER_REQUEST) {
-                            // 如果當前獲取的總數小於 API 報告的總數，並且這次請求滿了 limit，則繼續獲取下一頁
                             currentOffset += API_LIMIT_PER_REQUEST;
-                            fetchNextPage(); // 遞迴獲取下一頁
+                            fetchNextPageFromApi(); // 遞迴獲取下一頁
                         } else {
                             // 所有資料都已獲取完畢
-                            Log.d(TAG, "All pages fetched. Total entries: " + allFareEntries.size());
-                            processLoadedData();
+                            Log.d(TAG, "All pages fetched from API. Total entries: " + allFareEntries.size());
+                            // 將獲取的資料存入資料庫並更新時間戳
+                            saveFareDataToDatabase(new ArrayList<>(allFareEntries)); // 傳遞副本以防修改
+                            processLoadedData(); // 然後處理載入的資料 (更新 UI 等)
                         }
                     } else {
-                        // 當前頁沒有資料，或者 entries 為空，也視為結束
-                        Log.d(TAG, "Current page has no entries or API returned empty list for this page. Assuming all fetched.");
+                        Log.d(TAG, "API: Current page has no entries or API returned empty list. Assuming all fetched.");
+                        if (!allFareEntries.isEmpty()) { // 如果之前頁面有數據
+                            saveFareDataToDatabase(new ArrayList<>(allFareEntries));
+                        }
                         processLoadedData();
                     }
                 } else {
-                    isLoadingAllPages = false;
-                    _isLoading.setValue(false);
+                    // API 錯誤處理
+                    isLoadingAllPagesFromApi = false;
+                    // _isLoading.setValue(false); // 應該在 processLoadedData 或這裡統一處理
                     Log.e(TAG, "API Error Response. Code: " + response.code() + ", Message: " + response.message());
+                    String errorMsg = "無法載入部分票價資料 (錯誤碼：" + response.code() + ")";
                     try {
-                        String errorBody = response.errorBody() != null ? response.errorBody().string() : "null";
-                        Log.e(TAG, "Error Body: " + errorBody);
-                        _errorMessage.setValue("無法載入部分票價資料 (錯誤碼：" + response.code() + ")");
-                    } catch (IOException e) {
-                        Log.e(TAG, "Error reading error body", e);
-                        _errorMessage.setValue("無法載入部分票價資料 (錯誤碼：" + response.code() + ")");
-                    }
-                    // 即使部分失敗，也嘗試處理已載入的資料
-                    if(!allFareEntries.isEmpty()){
-                        Log.w(TAG, "Processing partially loaded data due to API error on subsequent page.");
-                        processLoadedData();
+                        if (response.errorBody() != null) errorMsg += " " + response.errorBody().string();
+                    } catch (IOException ignored) {}
+                    _errorMessage.postValue(errorMsg); // 使用 postValue 因為可能在背景執行緒 (雖然 Retrofit callback 在主執行緒)
+
+                    // 即使 API 失敗，如果之前從快取或其他頁面載入了資料，也嘗試處理
+                    if (!allFareEntries.isEmpty()) {
+                        Log.w(TAG, "Processing potentially partial data due to API error.");
+                        processLoadedData(); // 這裡會把 isLoading 設為 false
                     } else {
-                        _stationList.setValue(new ArrayList<>()); // 確保清空
+                        // 確保 isLoading 被設為 false，並且 stationList 為空
+                        _isLoading.postValue(false);
+                        _stationList.postValue(new ArrayList<>());
                     }
                 }
             }
 
             @Override
             public void onFailure(Call<MetroApiResponse> call, Throwable t) {
-                isLoadingAllPages = false;
-                _isLoading.setValue(false);
-                Log.e(TAG, "Network Error during paged fetch", t);
-                _errorMessage.setValue("網路連線失敗，請稍後再試。");
-                if(!allFareEntries.isEmpty()){
-                    Log.w(TAG, "Processing partially loaded data due to network error.");
+                // 網路錯誤處理
+                isLoadingAllPagesFromApi = false;
+                // _isLoading.setValue(false);
+                Log.e(TAG, "Network Error during paged API fetch", t);
+                _errorMessage.postValue("網路連線失敗，請稍後再試。");
+
+                if (!allFareEntries.isEmpty()) {
+                    Log.w(TAG, "Processing potentially partial data due to network error.");
                     processLoadedData();
                 } else {
-                    _stationList.setValue(new ArrayList<>()); // 確保清空
+                    _isLoading.postValue(false);
+                    _stationList.postValue(new ArrayList<>());
                 }
             }
         });
     }
 
-    private void processLoadedData() {
-        isLoadingAllPages = false; // 所有分頁（或嘗試）載入完畢
-        _isLoading.setValue(false);
+    private void saveFareDataToDatabase(final List<FareEntry> entriesToSave) {
+        databaseExecutor.execute(() -> { // 在後台執行緒中操作資料庫
+            try {
+                fareEntryDao.deleteAll(); // 清空舊資料
+                fareEntryDao.insertAll(entriesToSave); // 插入新資料
+                // 更新時間戳
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putLong(KEY_LAST_UPDATE_TIMESTAMP, System.currentTimeMillis());
+                editor.apply();
+                Log.d(TAG, "Saved " + entriesToSave.size() + " entries to database and updated timestamp.");
+            } catch (Exception e) {
+                Log.e(TAG, "Error saving data to database", e);
+                // 可以考慮在這裡設定一個錯誤訊息
+            }
+        });
+    }
+
+
+    private void processLoadedData() { // 這個方法應該在主執行緒被呼叫，因為它更新 LiveData
+        isLoadingAllPagesFromApi = false; // API 分頁載入結束 (無論成功與否)
+        _isLoading.setValue(false); // 整體載入過程結束
 
         if (allFareEntries.isEmpty()) {
-            Log.w(TAG, "No fare entries loaded after fetching all pages.");
-            if (_errorMessage.getValue() == null) { // 如果還沒有其他錯誤訊息
+            Log.w(TAG, "No fare entries to process.");
+            if (_errorMessage.getValue() == null || _errorMessage.getValue().isEmpty()) {
                 _errorMessage.setValue("未能載入任何票價資料。");
             }
             _stationList.setValue(new ArrayList<>());
@@ -185,28 +247,31 @@ public class FareQueryViewModel extends ViewModel {
         }
         List<String> sortedStations = new ArrayList<>(stationSet);
         Collections.sort(sortedStations);
-        _stationList.setValue(sortedStations);
-        Log.d(TAG, "Station list updated with " + sortedStations.size() + " unique stations.");
+        _stationList.setValue(sortedStations); // 更新 LiveData 會觸發 UI 更新
+        Log.d(TAG, "Station list updated with " + sortedStations.size() + " unique stations from processed data.");
     }
 
 
-    // queryFare 方法保持不變，它會使用已經填充好的 allFareEntries
+    // queryFare 方法基本不變，但要確保它使用的是內存中的 allFareEntries
     public void queryFare(String startStation, String endStation) {
-        // ... (之前的 queryFare 邏輯)
-        // 確保在 queryFare 的開頭，也檢查 isLoadingAllPages，如果還在載入所有頁面，可以提示使用者稍等
-        if (isLoadingAllPages) {
-            _errorMessage.setValue("票價資料仍在載入中，請稍候...");
+        // 檢查 isLoadingAllPagesFromApi 而不是 isLoading，因為 isLoading 可能因快取載入而很快變 false
+        if (isLoadingAllPagesFromApi) {
+            _errorMessage.setValue("票價資料仍在從網路載入中，請稍候...");
+            return;
+        }
+        if (_isLoading.getValue() != null && _isLoading.getValue()) {
+            // 如果 _isLoading 仍然是 true (例如，剛從快取載入完，正在 processLoadedData)
+            _errorMessage.setValue("票價資料準備中，請稍候...");
             return;
         }
 
+
         _isLoading.setValue(true); // 查詢過程也顯示 loading
-       //不同票價
         _fullFareResult.setValue(null);
         _concessionFareResult.setValue(null);
         _taipeiChildFareResult.setValue(null);
         _distanceResult.setValue(null);
         _errorMessage.setValue(null);
-
 
         if (startStation == null || startStation.isEmpty() || endStation == null || endStation.isEmpty()) {
             _errorMessage.setValue("請選擇起點和終點站。");
@@ -214,31 +279,20 @@ public class FareQueryViewModel extends ViewModel {
             return;
         }
 
+        // 由於資料庫操作在後台，這裡直接查詢內存中的 allFareEntries
+        // allFareEntries 應該在 loadFareData 或 fetchAllFareDataPagesFromApi 後被填充
         FareEntry foundEntry = null;
-        Log.d(TAG, "Querying for: Start='" + startStation + "', End='" + endStation + "'");
-        Log.d(TAG, "Total fare entries available for query: " + allFareEntries.size());
-
-
         if (!allFareEntries.isEmpty()) {
-            for (FareEntry entry : allFareEntries) { // 使用增強型 for 循環更簡潔
-                String entryFrom = entry.getFromStation();
-                String entryTo = entry.getToStation();
-                if (startStation.equals(entryFrom) && endStation.equals(entryTo)) {
+            for (FareEntry entry : allFareEntries) {
+                if (startStation.equals(entry.getFromStation()) && endStation.equals(entry.getToStation())) {
                     foundEntry = entry;
-                    Log.i(TAG, ">>>> Found matching entry (forward): " + entryFrom + " -> " + entryTo);
                     break;
                 }
             }
-        }
-
-        if (foundEntry == null) { // 如果正向沒找到，才嘗試反向
-            if (!allFareEntries.isEmpty()) {
+            if (foundEntry == null) { // 嘗試反向
                 for (FareEntry entry : allFareEntries) {
-                    String entryFrom = entry.getFromStation();
-                    String entryTo = entry.getToStation();
-                    if (endStation.equals(entryFrom) && startStation.equals(entryTo)) {
-                        foundEntry = entry; // 反向找到也用 foundEntry
-                        Log.i(TAG, ">>>> Found matching entry (reverse): " + entryFrom + " -> " + entryTo);
+                    if (endStation.equals(entry.getFromStation()) && startStation.equals(entry.getToStation())) {
+                        foundEntry = entry;
                         break;
                     }
                 }
@@ -246,12 +300,9 @@ public class FareQueryViewModel extends ViewModel {
         }
 
         if (foundEntry != null) {
-            // --- 修改：設定所有票價 LiveData ---
             _fullFareResult.setValue("全票票價：NT$ " + foundEntry.getFullFare());
             _concessionFareResult.setValue("敬老愛心/兒童(新北)：NT$ " + foundEntry.getConcessionFare());
             _taipeiChildFareResult.setValue("兒童(北市)：NT$ " + foundEntry.getTaipeiChildFare());
-            // --- 修改結束 ---
-
             String distanceStr = foundEntry.getDistance();
             try {
                 if (distanceStr != null && !distanceStr.trim().isEmpty()) {
@@ -262,12 +313,18 @@ public class FareQueryViewModel extends ViewModel {
                 }
             } catch (NumberFormatException e) {
                 _distanceResult.setValue("距離：" + (distanceStr != null ? distanceStr : "無資料"));
-                Log.w(TAG, "Could not parse distance: " + distanceStr, e);
             }
         } else {
             _errorMessage.setValue("找不到從 " + startStation + " 到 " + endStation + " 的票價資訊。");
-            Log.w(TAG, "No fare info found for: Start='" + startStation + "', End='" + endStation + "'");
         }
         _isLoading.setValue(false);
     }
+
+    // 當 ViewModel 被銷毀時，可以關閉 ExecutorService
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        databaseExecutor.shutdown();
+    }
 }
+
