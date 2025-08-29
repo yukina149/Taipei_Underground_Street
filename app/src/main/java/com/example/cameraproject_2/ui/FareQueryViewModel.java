@@ -24,6 +24,7 @@ import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
+//呼叫API資料
 public class FareQueryViewModel extends ViewModel {
 
     private static final String TAG = "FareQueryVM";
@@ -31,8 +32,15 @@ public class FareQueryViewModel extends ViewModel {
     private final MutableLiveData<List<String>> _stationList = new MutableLiveData<>();
     public final LiveData<List<String>> stationList = _stationList;
 
-    private final MutableLiveData<String> _fareResult = new MutableLiveData<>();
-    public final LiveData<String> fareResult = _fareResult;
+    //---全票---
+    private final MutableLiveData<String> _fullFareResult = new MutableLiveData<>();
+    public final LiveData<String> fullFareResult = _fullFareResult;
+    //---愛心票---
+    private final MutableLiveData<String> _concessionFareResult = new MutableLiveData<>();
+    public final LiveData<String> concessionFareResult = _concessionFareResult;
+    //---北市兒童票---
+    private final MutableLiveData<String> _taipeiChildFareResult = new MutableLiveData<>();
+    public final LiveData<String> taipeiChildFareResult = _taipeiChildFareResult;
 
     private final MutableLiveData<String> _distanceResult = new MutableLiveData<>();
     public final LiveData<String> distanceResult = _distanceResult;
@@ -192,7 +200,10 @@ public class FareQueryViewModel extends ViewModel {
         }
 
         _isLoading.setValue(true); // 查詢過程也顯示 loading
-        _fareResult.setValue(null);
+       //不同票價
+        _fullFareResult.setValue(null);
+        _concessionFareResult.setValue(null);
+        _taipeiChildFareResult.setValue(null);
         _distanceResult.setValue(null);
         _errorMessage.setValue(null);
 
@@ -202,13 +213,6 @@ public class FareQueryViewModel extends ViewModel {
             _isLoading.setValue(false);
             return;
         }
-        if (startStation.equals(endStation)) {
-            // 這個情況應該由 API 資料處理，例如 "松山機場" 到 "松山機場" 票價 20
-            // 但如果業務邏輯不允許同站查詢，可以在這裡攔截
-            // _errorMessage.setValue("起點和終點站不能相同。");
-            // _isLoading.setValue(false);
-            // return;
-        }
 
         FareEntry foundEntry = null;
         Log.d(TAG, "Querying for: Start='" + startStation + "', End='" + endStation + "'");
@@ -216,28 +220,38 @@ public class FareQueryViewModel extends ViewModel {
 
 
         if (!allFareEntries.isEmpty()) {
-            for (int i = 0; i < allFareEntries.size(); i++) {
-                FareEntry entry = allFareEntries.get(i);
+            for (FareEntry entry : allFareEntries) { // 使用增強型 for 循環更簡潔
                 String entryFrom = entry.getFromStation();
                 String entryTo = entry.getToStation();
-
-                // (可選) 移除之前非常詳細的比較日誌，或保留用於調試
-                // Log.d(TAG, "Entry #" + i + ": FromAPI='" + entryFrom + "', ToAPI='" + entryTo + ...);
-
-                boolean startMatches = (entryFrom != null && startStation.equals(entryFrom));
-                boolean endMatches = (entryTo != null && endStation.equals(entryTo));
-
-                if (startMatches && endMatches) {
+                if (startStation.equals(entryFrom) && endStation.equals(entryTo)) {
                     foundEntry = entry;
-                    Log.i(TAG, ">>>> Found matching entry (forward) at index " + i + ": " +
-                            entryFrom + " -> " + entryTo);
+                    Log.i(TAG, ">>>> Found matching entry (forward): " + entryFrom + " -> " + entryTo);
                     break;
                 }
             }
         }
 
+        if (foundEntry == null) { // 如果正向沒找到，才嘗試反向
+            if (!allFareEntries.isEmpty()) {
+                for (FareEntry entry : allFareEntries) {
+                    String entryFrom = entry.getFromStation();
+                    String entryTo = entry.getToStation();
+                    if (endStation.equals(entryFrom) && startStation.equals(entryTo)) {
+                        foundEntry = entry; // 反向找到也用 foundEntry
+                        Log.i(TAG, ">>>> Found matching entry (reverse): " + entryFrom + " -> " + entryTo);
+                        break;
+                    }
+                }
+            }
+        }
+
         if (foundEntry != null) {
-            _fareResult.setValue("全票票價：NT$ " + foundEntry.getFullFare());
+            // --- 修改：設定所有票價 LiveData ---
+            _fullFareResult.setValue("全票票價：NT$ " + foundEntry.getFullFare());
+            _concessionFareResult.setValue("敬老愛心/兒童(新北)：NT$ " + foundEntry.getConcessionFare());
+            _taipeiChildFareResult.setValue("兒童(北市)：NT$ " + foundEntry.getTaipeiChildFare());
+            // --- 修改結束 ---
+
             String distanceStr = foundEntry.getDistance();
             try {
                 if (distanceStr != null && !distanceStr.trim().isEmpty()) {
@@ -251,41 +265,8 @@ public class FareQueryViewModel extends ViewModel {
                 Log.w(TAG, "Could not parse distance: " + distanceStr, e);
             }
         } else {
-            // 嘗試反向查詢
-            FareEntry foundReverseEntry = null;
-            if (!allFareEntries.isEmpty()) {
-                for (int i = 0; i < allFareEntries.size(); i++) {
-                    FareEntry entry = allFareEntries.get(i);
-                    String entryFrom = entry.getFromStation();
-                    String entryTo = entry.getToStation();
-                    boolean reverseStartMatches = (entryFrom != null && endStation.equals(entryFrom));
-                    boolean reverseEndMatches = (entryTo != null && startStation.equals(entryTo));
-                    if (reverseStartMatches && reverseEndMatches) {
-                        foundReverseEntry = entry;
-                        Log.i(TAG, ">>>> Found matching entry (reverse) at index " + i + ": " +
-                                entryFrom + " -> " + entryTo);
-                        break;
-                    }
-                }
-            }
-            if (foundReverseEntry != null) {
-                _fareResult.setValue("全票票價：NT$ " + foundReverseEntry.getFullFare());
-                String distanceStr = foundReverseEntry.getDistance();
-                try {
-                    if (distanceStr != null && !distanceStr.trim().isEmpty()) {
-                        double distValue = Double.parseDouble(distanceStr);
-                        _distanceResult.setValue(String.format(Locale.US, "距離：%.1f km", distValue));
-                    } else {
-                        _distanceResult.setValue("距離：無資料");
-                    }
-                } catch (NumberFormatException e) {
-                    _distanceResult.setValue("距離：" + (distanceStr != null ? distanceStr : "無資料"));
-                    Log.w(TAG, "Could not parse reverse distance: " + distanceStr, e);
-                }
-            } else {
-                _errorMessage.setValue("找不到從 " + startStation + " 到 " + endStation + " 的票價資訊。");
-                Log.w(TAG, "No fare info found for: Start='" + startStation + "', End='" + endStation + "'");
-            }
+            _errorMessage.setValue("找不到從 " + startStation + " 到 " + endStation + " 的票價資訊。");
+            Log.w(TAG, "No fare info found for: Start='" + startStation + "', End='" + endStation + "'");
         }
         _isLoading.setValue(false);
     }

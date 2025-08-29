@@ -5,14 +5,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="16dp"
-    tools:context=".ui.FareQueryActivity">  <!-- 修改 context 為你的 Activity 路徑 -->
+    tools:context=".ui.FareQueryActivity">
 
     <TextView
         android:id="@+id/textViewTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="捷運票價查詢"
-        android:textSize="24sp"
+        android:textSize="26sp"
         android:textStyle="bold"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -66,26 +66,55 @@
 
     <Button
         android:id="@+id/buttonQueryFare"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="144dp"
+        android:layout_height="62dp"
         android:layout_marginTop="24dp"
+        android:textSize="18sp"
+        android:backgroundTint="@color/AADEE3"
+        android:textColor="@color/black"
         android:text="查詢"
-        app:layout_constraintTop_toBottomOf="@id/endStationInputLayout"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/endStationInputLayout" />
 
     <TextView
-        android:id="@+id/textViewFareResult"
+        android:id="@+id/textViewFullFareResult"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         android:textSize="18sp"
         android:visibility="gone"
-        tools:text="票價：NT$ 25"
+        tools:text="全票票價：NT$ 25"
         tools:visibility="visible"
         app:layout_constraintTop_toBottomOf="@id/buttonQueryFare"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
+    <!--愛心票-->
+
+    <TextView
+        android:id="@+id/textViewConcessionFareResult"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textSize="18sp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/textViewFullFareResult"
+        tools:text="敬老愛心/兒童(新北)：NT$ 12"
+        tools:visibility="visible" />
+    <TextView
+        android:id="@+id/textViewTaipeiChildFareResult"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textSize="18sp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/textViewConcessionFareResult"
+        tools:text="兒童(北市)：NT$ 10"
+        tools:visibility="visible" />
 
     <TextView
         android:id="@+id/textViewDistanceResult"
@@ -96,7 +125,7 @@
         android:visibility="gone"
         tools:text="距離：3.2 km"
         tools:visibility="visible"
-        app:layout_constraintTop_toBottomOf="@id/textViewFareResult"
+        app:layout_constraintTop_toBottomOf="@id/textViewTaipeiChildFareResult"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
