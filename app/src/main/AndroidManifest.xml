@@ -5,29 +5,40 @@
     <!-- 添加網路權限 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- 如果你需要檢查網路狀態 (例如，在發起請求前檢查是否有網路), 也可以添加這個 -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- 檢查網路狀態 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <!-- 8/10新增 請求定位 -->
     <!-- 關鍵：精確位置權限 (navigator.geolocation 需要) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- 可選：粗略位置權限 -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />  
+  
+  <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" /> 
 
     <meta-data
         android:name="com.google.ar.core"
         android:value="required" />
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <uses-feature
         android:name="android.hardware.camera.ar"
         android:required="true" />
 
     <application
+        android:name=".MyApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -36,8 +47,76 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CameraProject_2"
+      //api-test分支
         android:usesCleartextTraffic="true"
+      //0908-merge分支
+        tools:replace="android:icon,android:theme"
         tools:targetApi="31">
+      
+        <activity
+            android:name=".AppGuideActivity"
+            android:exported="false" />
+        <activity
+            android:name=".receive_group"
+            android:exported="false" />
+        <activity
+            android:name=".chatroom_main"
+            android:exported="false" />
+        <activity
+            android:name=".change_password"
+            android:exported="false" />
+        <activity
+            android:name=".change_username"
+            android:exported="false" />
+        <activity
+            android:name=".UploadImage"
+            android:exported="false" />
+        <activity
+            android:name=".UserProfileActivity"
+            android:exported="true"
+            android:label="User Profile"> <!-- 明確指定 exported=true，因為有 intent-filter -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".IntroductoryActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".CreateGroupActivity"
+            android:exported="false" />
+        <activity
+            android:name=".CreatAccount"
+            android:exported="false" />
+        <activity
+            android:name=".Chatroom"
+            android:exported="false"
+            android:label="Chatroom"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+            android:name=".PersonalAccount"
+            android:exported="false"
+            android:hardwareAccelerated="false"
+            android:label="Personal Account" />
+        <activity
+            android:name=".WhereLocation"
+            android:exported="false" />
+        <activity
+            android:name=".UnityHanderActivity"
+            android:exported="false" />
         <activity
             android:name=".ARNavigationActivity"
             android:exported="false" />
@@ -49,28 +128,23 @@
             android:exported="false" />
         <activity
             android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+        <activity
+            android:name=".MapActivity"
+            android:exported="false" />
+       
+      //api-test分支定義事件用
         <activity android:name=".MapActivity" />
         <activity
             android:name=".ui.FareQueryActivity"
-            android:exported="true"> <!-- 或者 false，取決於你是否需要從外部啟動 -->
-            <!-- 如果這是你的啟動 Activity，請添加以下 intent-filter -->
-            <!--
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            -->
+            android:exported="true">
         </activity>
         <!--8/10新增 捷運站出口地圖的activity檔 ExitMapActivity.java -->
         <activity android:name=".ExitMapActivity" />
-        
+        //api-test新增的事件到這裡為止
+
+      
         <meta-data
             android:name="com.google.ar.core"
             android:value="required" />

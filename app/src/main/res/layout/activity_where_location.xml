@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    tools:context=".WhereLocation">
+
+    <!-- 頂部 BAR -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/top_bar_card"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        app:cardElevation="4dp"
+        app:cardCornerRadius="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FFFFFF"
+            android:gravity="center_vertical">
+
+            <!-- 返回箭頭 -->
+            <ImageView
+                android:id="@+id/backArrow"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="16dp"
+                android:src="@drawable/ic_back_arrow_2"
+                android:contentDescription="Back" />
+
+            <!-- 中間文字 "群組通知" -->
+            <TextView
+                android:id="@+id/title_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:text="匹配資料庫"
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- RecyclerView 用於顯示 CardView -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/location_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:padding="16dp"
+        app:layout_constraintTop_toBottomOf="@+id/top_bar_card"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_text"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:listitem="@layout/item_location_card" />
+
+    <!-- 下方文字 -->
+    <TextView
+        android:id="@+id/bottom_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="共 0 個匹配結果"
+        android:textColor="#000000"
+        android:textSize="25sp"
+        android:gravity="center"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

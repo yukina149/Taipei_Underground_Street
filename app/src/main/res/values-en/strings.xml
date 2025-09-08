@@ -1,0 +1,83 @@
+<resources>
+    <string name="app_name">Unlost</string>
+
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="taipei">Taipei Underground Mall Navigation</string>
+    <string name="uploaded_image_desc">Uploaded image</string>
+    <string name="database_image_desc">Database matched image</string>
+    <string name="location_unknown">Location: Unknown</string>
+    <string name="upload_image">Upload image</string>
+    <string name="appbar_scrolling_view_behavior">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
+
+    <string name="game_view_content_description">Game view</string>
+
+    <string name="open">Open</string>
+    <string name="close">Close</string>
+
+    <string name="guest">Guest</string>
+
+    <string name="language_setting">Language Setting</string>
+    <string name="user_guide">User Guide</string>
+    <string name="delete_account">Delete Account</string>
+    <string name="language_english">English</string>
+    <string name="language_japanese">Japanese</string>
+    <string name="language_chinese">Chinese</string>
+
+    <string name="user_guide_content">This is the user guide content. Please modify as needed.</string>
+    <string name="delete_account_confirm">Are you sure you want to delete your account? This action cannot be undone.</string>
+    <string name="delete">Delete</string>
+    <string name="account_deleted">Account has been successfully deleted.</string>
+    <string name="user_info_not_found">User information not found.</string>
+    <string name="confirm_language_change">Confirm Language Change</string>
+    <string name="confirm_language_message">Are you sure you want to change the language to %1$s?</string>
+    <string name="language_change_cancelled">Language change has been cancelled.</string>
+
+    <string name="incorrect_location">Incorrect Location</string>
+    <string name="start_navigation">Start Navigation</string>
+
+    <!-- Added missing strings -->
+    <string name="current_location_label">Current Location:</string>
+    <string name="home_page">Returned to home page</string>
+    <string name="taipei_info">Taipei Underground Mall Information</string>
+    <string name="account_logout_confirm">Are you sure you want to log out?</string>
+    <string name="account_logout_success">Successfully logged out</string>
+    <string name="group_invitation_title">Group Invitation</string>
+    <string name="group_invitation_message">You have been invited to join the group: %1$s</string>
+    <string name="accept_invitation_success">Accepted group invitation: %1$s</string>
+    <string name="reject_invitation_success">Rejected group invitation: %1$s</string>
+    <string name="new_group_notification_title">New Group Invitation</string>
+    <string name="new_group_notification_message">You have received an invitation from the group %1$s</string>
+
+    <string name="init_failed">Application initialization failed, please contact the developer</string>
+    <string name="navigation_setup_failed">Navigation setup failed</string>
+    <string name="database_init_failed">Database initialization failed</string>
+    <string name="map_load_failed">Unable to load matched map image</string>
+    <string name="location_updated">Location updated to: %1$s</string>
+    <string name="location_not_selected">No location selected</string>
+    <string name="operation_cancelled">Operation cancelled or failed</string>
+    <string name="camera_permission_required">Camera and storage permissions are required to use the camera function</string>
+    <string name="notification_permission_granted">Notification permission granted</string>
+    <string name="notification_permission_required">Notification permission is required to receive group invitation notifications</string>
+
+
+    <string name="picture">Picture</string>
+    <string name="camera">Camera</string>
+
+    <string name="navigation_home">Home</string>
+    <string name="navigation_chat">Chat Room</string>
+    <string name="navigation_member">Member Info</string>
+    <string name="navigation_info">Taipei Main Station Underground Mall Info</string>
+    <string name="navigation_settings">Settings</string>
+
+    <string name="profile_image">Profile Image</string>
+    <string name="change_profile">Change Profile Picture</string>
+    <string name="username_hint">Enter Name</string>
+    <string name="user_id_label">Account: [User ID]</string>
+    <string name="logout">Logout</string>
+    <string name="switch_account">Switch Account</string>
+    <string name="login">Login</string>
+
+
+
+</resources>

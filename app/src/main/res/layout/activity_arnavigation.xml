@@ -1,18 +1,31 @@
-<?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+    <TextureView
+        android:id="@+id/texture_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/processed_image_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:scaleType="fitCenter" />
+
     <com.google.ar.sceneform.ArSceneView
         android:id="@+id/ar_scene_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:visibility="visible" />
 
     <TextView
         android:id="@+id/navigation_info_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="導航信息"
+        android:text="導航訊息"
         android:textSize="18sp"
         android:background="#AA000000"
         android:textColor="#FFFFFF"
@@ -20,12 +33,37 @@
         android:layout_alignParentTop="true"
         android:layout_centerHorizontal="true" />
 
-    <Button
-        android:id="@+id/start_navigation_button"
+    <TextView
+        android:id="@+id/description_text_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="開始導航"
-        android:layout_alignParentBottom="true"
-        android:layout_centerHorizontal="true" />
+        android:text="描述訊息"
+        android:textSize="16sp"
+        android:layout_below="@id/navigation_info_text"
+        android:layout_centerHorizontal="true"
+        android:background="#AAFFFFFF"
+        android:padding="4dp"
+        android:textColor="#000000" />
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_alignParentBottom="true">
+
+        <Button
+            android:id="@+id/start_ar_navigation_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="開始 AR 導航"
+            android:layout_margin="8dp"/>
+
+        <Button
+            android:id="@+id/start_orb_detection_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="開始偵測位置 (ORB)"
+            android:layout_margin="8dp"/>
+    </LinearLayout>
 </RelativeLayout>

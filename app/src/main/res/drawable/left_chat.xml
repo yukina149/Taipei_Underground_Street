@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="36dp"
+    android:viewportWidth="120"
+    android:viewportHeight="36">
+
+    <!-- 左邊箭頭（三角形），使用 path 以對應原 svg path -->
+<path
+android:fillColor="#E9F0F3"
+android:pathData="M0,5.07799 L11.25,0.252988 L11.25,9.90298 L0,5.07799 Z" />
+
+    <!-- 矩形，x 從 11.25 開始以留出箭頭寬度 -->
+<path
+android:fillColor="#E9F0F3"
+android:pathData="M11.25,0
+                          h96.75
+                          a5,5 0 0 1 5,5
+                          v26
+                          a5,5 0 0 1 -5,5
+                          h-96.75
+                          a5,5 0 0 1 -5,-5
+                          v-26
+                          a5,5 0 0 1 5,-5
+                          z"/>
+    </vector>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white">
+
+    <!-- 包含 MainActivity 的佈局作為背景 -->
+    <include
+        android:id="@+id/main_activity_layout"
+        layout="@layout/activity_main"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- 半透明灰色覆蓋層 -->
+    <View
+        android:id="@+id/overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+
+
+    <!-- ViewPager 用於顯示使用說明圖片 -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/tabLayout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- TabLayout 用於顯示滑動底線 -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:color/transparent"
+        app:tabIndicatorColor="#FFFFFF"
+        app:tabIndicatorHeight="4dp"
+        app:tabGravity="center"
+        app:tabMode="fixed"
+        app:tabIndicatorFullWidth="true"
+        app:layout_constraintBottom_toTopOf="@id/checkBoxDoNotShowAgain"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="16dp"
+        android:elevation="12dp" />
+
+    <!-- 「不再顯示」勾選框 -->
+    <CheckBox
+        android:id="@+id/checkBoxDoNotShowAgain"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/do_not_show_again"
+        android:textSize="16sp"
+        android:textColor="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="16dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

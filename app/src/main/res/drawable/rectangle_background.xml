@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 陰影層 -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#20000000" /> <!-- 陰影顏色和透明度 -->
+            <corners android:radius="4dp" /> <!-- 可選：圓角 -->
+            <padding
+                android:bottom="4dp"/>
+        </shape>
+    </item>
+    <!-- 長方形主體 -->
+    <item android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" /> <!-- 長方形顏色 -->
+            <corners android:radius="4dp" /> <!-- 可選：圓角 -->
+        </shape>
+    </item>
+</layer-list>

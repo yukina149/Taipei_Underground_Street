@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/drawer_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <!-- 主內容區域 -->
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- AppBarLayout 用於包含頂部欄 -->
+        <com.google.android.material.appbar.AppBarLayout
+            android:id="@+id/appBarLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+
+            <!-- 頂部欄 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="?attr/actionBarSize"
+                android:background="@color/mainbutton"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <!-- 返回箭頭 -->
+                <ImageView
+                    android:id="@+id/backArrow"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="16dp"
+                    android:src="@drawable/ic_back_arrow_2"
+                    android:contentDescription="Back" />
+
+                <!-- 群組名稱 -->
+                <TextView
+                    android:id="@+id/textViewGroupName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text=" "
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/black"
+                    android:padding="8dp" />
+
+                <!-- 填充空間 -->
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+
+                <!-- 刷新圖標 -->
+                <ImageView
+                    android:id="@+id/refreshIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="16dp"
+                    android:src="@drawable/ic_refresh"
+                    android:contentDescription="Refresh" />
+
+            </LinearLayout>
+
+        </com.google.android.material.appbar.AppBarLayout>
+
+        <!-- 主內容 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center_vertical"
+            app:layout_behavior="@string/appbar_scrolling_view_behavior"
+            android:padding="16dp"
+            android:background="@android:color/white">
+
+            <!-- 訊息列表 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/messageRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:background="@android:color/transparent" />
+
+            <!-- 輸入框和發送按鈕 -->
+            <LinearLayout
+                android:id="@+id/messageInputLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:background="@android:color/white"
+                android:padding="8dp"
+                android:elevation="4dp">
+
+                <EditText
+                    android:id="@+id/editTextMessage"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="發送訊息..."
+                    android:padding="12dp"
+                    android:background="@android:drawable/edit_text"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/black"
+                    android:textColorHint="@android:color/darker_gray" />
+
+                <Button
+                    android:id="@+id/buttonSend"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="傳送"
+                    android:textColor="@color/black"
+                    android:backgroundTint="@color/color_change_blue"
+                    android:padding="8dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+    <!-- 導航抽屜 -->
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/nav_view"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="@android:color/white"
+        app:headerLayout="@layout/activity_menu_header"
+        app:menu="@menu/nav_menu"
+        app:itemTextColor="@android:color/black"
+        app:itemIconTint="@android:color/black"
+        app:elevation="4dp" />
+</androidx.drawerlayout.widget.DrawerLayout>

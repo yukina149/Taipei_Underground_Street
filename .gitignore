@@ -14,6 +14,11 @@
 .cxx
 local.properties
 
+#unity library 
+unityLibrary/**
+!unityLibrary/build.gradle
+!unityLibrary/src/main/AndroidManifest.xml
+
 # Project exclude paths
 /sdk/build/
 /sdk/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/

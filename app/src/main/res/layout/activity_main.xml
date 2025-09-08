@@ -1,278 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
 <androidx.drawerlayout.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-    <ScrollView
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    tools:context=".MainActivity"
+    tools:openDrawer="start">
+
+    <!-- 主內容區域 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-        <RelativeLayout
-            android:id="@+id/main_layout"
+
+        <!-- 滾動視圖 -->
+        <ScrollView
+            android:id="@+id/scroll_view"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/cut_card_background"
-            tools:context=".MainActivity">
-            <ImageView
-                android:id="@+id/menuIcon"
-                android:layout_width="50dp"
-                android:layout_height="50dp"
-                android:layout_margin="12dp"
-                android:layout_marginRight="10dp"
-                android:src="@drawable/ic_menu"/>
-            <!--  APP名稱  -->
-            <TextView
-                android:id="@+id/app_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_centerInParent="false"
-                android:layout_centerHorizontal="true"
-                android:layout_margin="12dp"
-                android:text="@string/taipei"
-                android:textColor="@color/color_gray"
-                android:textSize="30sp"
-                android:textStyle="bold"/>
-            <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_height="0dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/bottom_navigation">
+
+            <RelativeLayout
+                android:id="@+id/main_layout"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
-                <ImageView
-                    android:id="@+id/bigmap"
-                    android:layout_width="400dp"
-                    android:layout_height="200dp"
-                    android:layout_marginStart="70dp"
-                    android:layout_marginTop="68dp"
-                    android:layout_marginEnd="70dp"
-                    android:src="@drawable/ic_bigmap"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintHorizontal_bias="0.529"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"/>
+                android:layout_height="wrap_content"
+                android:background="@color/white">
 
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/bigmap">
+                    android:layout_height="wrap_content"
+                    android:paddingBottom="80dp">
 
-                    <TextView
-                        android:id="@+id/currentLocationTextView"
-                        android:layout_width="300dp"
-                        android:layout_height="43dp"
-                        android:layout_marginStart="24dp"
-                        android:layout_marginTop="8dp"
-                        android:layout_marginEnd="50dp"
-                        android:gravity="center"
-                        android:text="Location"
-                        android:textColor="#FAFFFFFF"
-                        android:textSize="24sp"
-                        android:textStyle="bold"
+                    <!-- 長方形，位於最上方，寬度與螢幕相同 -->
+                    <View
+                        android:id="@+id/rectangle"
+                        android:layout_width="0dp"
+                        android:layout_height="75dp"
+                        android:background="@drawable/rectangle_background"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="parent" />
 
+                    <!-- 應用名稱圖標 -->
+                    <ImageView
+                        android:id="@+id/app_name"
+                        android:layout_width="303dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginEnd="12dp"
+                        android:layout_marginBottom="12dp"
+                        android:contentDescription="App logo"
+                        android:src="@drawable/logoin_unlost"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="@id/rectangle" />
+
+
+                    <!-- 當前位置（原 currentLocationTextView） -->
                     <TextView
-                        android:id="@+id/textview10"
-                        android:layout_width="113dp"
-                        android:layout_height="44dp"
-                        android:layout_marginStart="44dp"
-                        android:text="選擇目的地"
-                        android:textColor="#FCFFFFFF"
-                        android:textSize="20sp"
-                        app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@id/currentLocationTextView" />
-
-                    <Spinner
-                        android:id="@+id/destinationSpinner"
-                        android:layout_width="237dp"
-                        android:layout_height="36dp"
+                        android:id="@+id/currentLocation"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
                         android:layout_marginTop="8dp"
-                        android:minWidth="48dp"
-                        android:minHeight="48dp"
-                        android:spinnerMode="dropdown"
-                        app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintHorizontal_bias="0.0"
-                        app:layout_constraintStart_toEndOf="@+id/textview10"
-                        app:layout_constraintTop_toBottomOf="@id/currentLocationTextView" />
-
-                    <LinearLayout
-                        android:id="@+id/L1"
-                        android:layout_width="0dp"
-                        android:layout_height="200dp"
-                        android:layout_marginStart="1dp"
-                        android:layout_marginTop="24dp"
-                        android:layout_marginEnd="1dp"
-                        android:orientation="horizontal"
-                        android:padding="10dp"
+                        android:layout_marginEnd="10dp"
+                        android:gravity="start"
+                        android:text="透過照片來比對現在的位置"
+                        android:textColor="#FF000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@+id/destinationSpinner">
+                        app:layout_constraintTop_toBottomOf="@id/rectangle" />
 
-                        <androidx.cardview.widget.CardView
-                            android:id="@+id/cardPicture"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_margin="15dp"
-                            android:layout_weight="1">
-
-                            <RelativeLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent">
-
-                                <ImageView
-                                    android:id="@+id/picture"
-                                    android:layout_width="75dp"
-                                    android:layout_height="75dp"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="20dp"
-                                    android:src="@drawable/ic_picture" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_below="@id/picture"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="10dp"
-                                    android:text="Picture"
-                                    android:textColor="@color/color_gray"
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </RelativeLayout>
-                        </androidx.cardview.widget.CardView>
-
-                        <androidx.cardview.widget.CardView
-                            android:id="@+id/cardCamera"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_margin="15dp"
-                            android:layout_weight="1">
-
-                            <RelativeLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent">
-
-                                <ImageView
-                                    android:id="@+id/camera"
-                                    android:layout_width="75dp"
-                                    android:layout_height="75dp"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="20dp"
-                                    android:src="@drawable/ic_camera" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_below="@id/camera"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="10dp"
-                                    android:text="Camera"
-                                    android:textColor="@color/color_gray"
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </RelativeLayout>
-                        </androidx.cardview.widget.CardView>
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/L2"
-                        android:layout_width="0dp"
-                        android:layout_height="200dp"
-                        android:layout_marginStart="1dp"
-                        android:layout_marginEnd="1dp"
-                        android:orientation="horizontal"
-                        android:padding="10dp"
+                    <!-- 白色立體方框（使用 CardView 實現圓角和立體效果） -->
+                    <androidx.cardview.widget.CardView
+                        android:id="@+id/white_box"
+                        android:layout_width="match_parent"
+                        android:layout_height="240dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:backgroundTint="@color/white"
+                        app:cardCornerRadius="12dp"
+                        app:cardElevation="4dp"
                         app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintHorizontal_bias="0.0"
                         app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@id/L1">
+                        app:layout_constraintTop_toBottomOf="@id/currentLocation">
 
-                        <androidx.cardview.widget.CardView
-                            android:id="@+id/cardMap"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_margin="15dp"
-                            android:layout_weight="1">
 
-                            <RelativeLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent">
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent">
 
-                                <ImageView
-                                    android:id="@+id/map"
-                                    android:layout_width="75dp"
-                                    android:layout_height="75dp"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="20dp"
-                                    android:src="@drawable/ic_map" />
+                            <!-- 上傳照片文字，位於 CardView 內垂直居中 -->
+                            <TextView
+                                android:id="@+id/uploadtext"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:text="上傳照片"
+                                android:textColor="#FF000000"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                app:layout_constraintTop_toTopOf="parent"
+                                app:layout_constraintBottom_toTopOf="@id/buttonupload"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintEnd_toEndOf="parent" />
 
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_below="@id/map"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="10dp"
-                                    android:text="Map"
-                                    android:textColor="@color/color_gray"
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </RelativeLayout>
-                        </androidx.cardview.widget.CardView>
+                            <!-- 按鈕：上傳圖片，位於下方垂直居中 -->
+                            <Button
+                                android:id="@+id/buttonupload"
+                                android:layout_width="200dp"
+                                android:layout_height="60dp"
+                                android:backgroundTint="@color/mainbutton"
+                                android:textColor="#000000"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                app:layout_constraintTop_toBottomOf="@id/uploadtext"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintEnd_toEndOf="parent"
+                                app:layout_constraintVertical_chainStyle="packed" />
 
-                        <androidx.cardview.widget.CardView
-                            android:id="@+id/cardGo"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_margin="15dp"
-                            android:layout_weight="1">
+                            <!-- Spinner：圖片來源選擇 -->
+                            <Spinner
+                                android:id="@+id/imageSourceSpinner"
+                                android:layout_width="200dp"
+                                android:layout_height="60dp"
+                                android:backgroundTint="@color/mainbutton"
+                                android:textColor="#000000"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                app:layout_constraintTop_toBottomOf="@id/uploadtext"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintEnd_toEndOf="parent"
+                                app:layout_constraintVertical_chainStyle="packed" />
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+                    </androidx.cardview.widget.CardView>
 
-                            <RelativeLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent">
+                    <!-- AR導航文字 -->
+                    <TextView
+                        android:id="@+id/artext"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="16dp"
+                        android:gravity="start"
+                        android:text="AR導航"
+                        android:textColor="#FF000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/white_box" />
 
-                                <ImageView
-                                    android:id="@+id/go"
-                                    android:layout_width="75dp"
-                                    android:layout_height="75dp"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="20dp"
-                                    android:src="@drawable/ic_go" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_below="@id/go"
-                                    android:layout_centerHorizontal="true"
-                                    android:layout_marginTop="10dp"
-                                    android:text="x"
-                                    android:textColor="@color/color_gray"
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </RelativeLayout>
-                        </androidx.cardview.widget.CardView>
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/L3"
+                    <!-- AR地圖 -->
+                    <ImageView
+                        android:id="@+id/armap"
                         android:layout_width="0dp"
                         android:layout_height="200dp"
-                        android:layout_marginStart="1dp"
-                        android:layout_marginEnd="1dp"
-                        android:orientation="horizontal"
-                        android:padding="10dp"
+                        android:layout_marginTop="16dp"
+                        android:src="@drawable/taipeiimage"
+                        android:alpha="0.4"
                         app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintHorizontal_bias="0.0"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/L2">
-                        <Button
-                            android:id="@+id/button_fare_query"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="進入票價查詢"
-                            app:layout_constraintTop_toBottomOf="@id/L3"
-                            app:layout_constraintStart_toStartOf="parent"
-                            app:layout_constraintEnd_toEndOf="parent"
-                            android:layout_marginTop="24dp" />
+                        
 
                         <androidx.cardview.widget.CardView
                             android:id="@+id/cardorb"
@@ -337,48 +235,60 @@
                                     android:textStyle="bold" />
                             </RelativeLayout>
                         </androidx.cardview.widget.CardView>
-                    <!--8/10-->
-                        <androidx.cardview.widget.CardView
-                            android:id="@+id/cardExitMap"
-                            android:layout_width="0dp"
-                            android:layout_height="match_parent"
-                            android:layout_margin="15dp"
-                            android:layout_weight="1">
+                   
 
-                            <RelativeLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginTop="10dp"
-                                    android:text="捷運出口地圖"
-                                    android:textColor="@color/color_gray"
-
-                                    android:textSize="20sp"
-                                    android:textStyle="bold" />
-                            </RelativeLayout>
-                        </androidx.cardview.widget.CardView>
-                    </LinearLayout>
                     <TextView
                         android:layout_width="517dp"
                         android:layout_height="174dp"
                         android:layout_marginTop="800dp"
                         android:textSize="100sp"
                         app:layout_constraintBottom_toBottomOf="parent"
+
+                        app:layout_constraintTop_toBottomOf="@id/artext" />
+
+                    <!-- 開始導航按鈕 -->
+                    <Button
+                        android:id="@+id/buttonCorrectLocation"
+                        android:layout_width="250dp"
+                        android:layout_height="60dp"
+                        android:layout_marginStart="99dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginEnd="99dp"
+                        android:backgroundTint="@color/mainbutton"
+                        android:alpha="0.4"
+                        android:enabled="false"
+                        android:text="進入AR導航"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toTopOf="parent" />
+                        app:layout_constraintTop_toBottomOf="@id/armap" />
                 </androidx.constraintlayout.widget.ConstraintLayout>
-            </androidx.constraintlayout.widget.ConstraintLayout>
-        </RelativeLayout>
-    </ScrollView>
+            </RelativeLayout>
+        </ScrollView>
+
+        <!-- 底部導航欄 -->
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_navigation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:menu="@menu/bottom_nav_menu"
+            app:itemIconSize="40dp"
+            app:itemTextColor="@color/my_forth"
+            app:itemIconTint="@color/my_forth"
+            android:background="@color/barcolor"
+            app:labelVisibilityMode="labeled" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 導航抽屜 -->
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/nav_view"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        app:menu="@menu/menu_main"/>
-
+        app:headerLayout="@layout/activity_menu_header"
+        app:menu="@menu/menu_main" />
 </androidx.drawerlayout.widget.DrawerLayout>

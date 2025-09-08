@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/openappbackphoto"
+    tools:context=".MainActivity">
+
+    <!-- 藍色半透明遮罩 -->
+    <RelativeLayout
+        android:id="@+id/blueContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/my_primary_translucent">
+
+        <!-- 返回箭頭 -->
+        <ImageView
+            android:id="@+id/backArrow"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="5dp"
+            android:layout_marginTop="10dp"
+            android:src="@drawable/ic_back_arrow"
+            android:contentDescription="Back" />
+
+        <!-- LOGO 區塊置中於藍色背景 -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:orientation="vertical"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHorizontal_bias="0.0"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <ImageView
+                    android:layout_width="120dp"
+                    android:layout_height="120dp"
+                    android:src="@drawable/location_icon" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Unlost"
+                    android:textColor="@color/white"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Find my way"
+                    android:textColor="@color/white"
+                    android:textSize="20sp"
+                    android:textStyle="normal" />
+            </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </RelativeLayout>
+
+    <!-- 底部卡片表單 -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="-23dp"
+        app:cardCornerRadius="28dp">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="28dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
+
+                <!-- 標題 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="創建帳號"
+                    android:textColor="@color/my_primary"
+                    android:textSize="32sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="20dp"
+                    android:gravity="center" />
+
+                <!-- 使用者帳號名稱 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:text="Account name"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="5dp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/textInputLayoutNewUsername"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    app:boxBackgroundMode="outline"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeWidthFocused="2dp">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editTextNewUsername"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="輸入使用者帳號名稱"
+                        android:inputType="text"
+                        android:padding="16dp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 信箱 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:text="Email address"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="5dp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/textInputLayoutEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    app:boxBackgroundMode="outline"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeWidthFocused="2dp">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editTextEmail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="輸入信箱"
+                        android:inputType="textEmailAddress"
+                        android:padding="16dp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 密碼 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:text="Password"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="5dp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/textInputLayoutNewPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    app:endIconMode="password_toggle">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editTextNewPassword"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="輸入密碼"
+                        android:inputType="textPassword"
+                        android:padding="16dp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 確認密碼 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:text="Confirm Password"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="5dp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/textInputLayoutConfirmPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="20dp"
+                    app:endIconMode="password_toggle">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editTextConfirmPassword"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="再次確認密碼"
+                        android:inputType="textPassword"
+                        android:padding="16dp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- 確認註冊按鈕 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonConfirmRegister"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:backgroundTint="@color/color_change_blue"
+                    android:text="確認註冊"
+                    app:cornerRadius="40dp"
+                    android:textColor="#000000"
+                    android:layout_gravity="center" />
+
+                <View
+                    android:layout_width="wrap_content"
+                    android:layout_height="10dp" />
+            </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.cardview.widget.CardView>
+
+</RelativeLayout>

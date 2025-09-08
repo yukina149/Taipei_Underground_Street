@@ -2,12 +2,31 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="red">#FF0000</color>
 
-    //顏碼網頁:https://irozukan.net/japanese
+    <!--顏碼網頁:https://irozukan.net/japanese-->
     <color name="color_blue">#A5DEE4</color>
     <color name="color_green">#A8D8B9</color>
     <color name="color_gray">#77969A</color>
     <color name="color_rice">#FCFAF2</color>
     <color name="color_white">#FFFFFB</color>
-    <color name="AADEE3">#AADEE3</color>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="color_introductory">#DCE0E9</color>
+    <color name="color_change_blue">#B5DDE2</color>
+    <color name="color_change_yello">#F9F0AA</color>
+
+
+    <color name="my_primary">#6db8e3</color>
+    <color name="my_secondary">#81c784</color>
+    <color name="my_third">#f6e27f</color>
+    <color name="my_forth">#4a4a4a</color>
+    <color name="my_primary_translucent">#B36DB8E3</color>
+
+    <color name="barcolor">#C4DBE9</color>
+    <color name="mainbutton">#AADEE3</color>
+    <color name="white_smoke">#F5F5F5</color>"
+
 </resources>

@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <style name="appTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">  #467500</item>
+        <item name="colorPrimaryDark">  #00DB00</item>
+        <item name="colorAccent">  #984B4B</item>
+        <item name="android:statusBarColor">  #000000</item>
+
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- 自訂顏色或其他屬性 -->
+        <item name="colorPrimary">#467500</item>
+        <item name="colorPrimaryDark">#00DB00</item>
+        <item name="colorAccent">#984B4B</item>
+    </style>
+
     <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">  #467500</item>
         <item name="colorPrimaryDark">  #00DB00</item>
@@ -8,5 +23,20 @@
         <item name="android:statusBarColor">  #000000</item>
 
     </style>
+
+    <style name="AppTabLayout" parent="Widget.MaterialComponents.TabLayout">
+        <item name="tabIndicatorColor">@android:color/white</item>
+        <item name="tabIndicatorHeight">6dp</item>
+        <item name="tabBackground">@android:color/transparent</item>
+        <item name="tabIndicatorFullWidth">false</item>
+        <item name="tabIndicatorGravity">center</item>
+    </style>
+
+    <style name="CircularShapeAppearance" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+
 
 </resources>

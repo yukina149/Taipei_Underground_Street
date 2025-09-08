@@ -1,8 +1,87 @@
 <resources>
-    <string name="app_name">Taipei Underground Street Navigation</string>
+    <string name="app_name">Unlost</string>
 
-    <string name="navigation_drawer_open">open navigation drawer</string>
-    <string name="navigation_drawer_close">close navigation drawer</string>
+    <string name="navigation_drawer_open">開啟導航抽屜</string>
+    <string name="navigation_drawer_close">關閉導航抽屜</string>
     <string name="taipei">台北地下街導航</string>
+    <string name="uploaded_image_desc">上傳的圖片</string>
+    <string name="database_image_desc">資料庫匹配的圖片</string>
+    <string name="location_unknown">位置：未知</string>
+    <string name="upload_image">上傳圖片</string>
+    <string name="appbar_scrolling_view_behavior">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
+
+    <string name="game_view_content_description">遊戲視圖</string>
+
+    <string name="open">開啟</string>
+    <string name="close">關閉</string>
+
+    <string name="guest">訪客</string>
+
+    <string name="language_setting">語言設定</string>
+    <string name="user_guide">觀看使用說明</string>
+    <string name="delete_account">刪除帳號</string>
+    <string name="language_english">英文</string>
+    <string name="language_japanese">日文</string>
+    <string name="language_chinese">中文</string>
+
+    <string name="user_guide_content">這裡是使用說明的內容，請根據需求修改。</string>
+    <string name="delete_account_confirm">您確定要刪除帳號嗎？此操作無法復原。</string>
+    <string name="delete">刪除</string>
+    <string name="account_deleted">帳號已成功刪除。</string>
+    <string name="user_info_not_found">找不到使用者資訊。</string>
+    <string name="confirm_language_change">確認語言更改</string>
+    <string name="confirm_language_message">您確定要將語言更改為 %1$s 嗎？</string>
+    <string name="language_change_cancelled">語言更改已取消。</string>
+
+    <string name="incorrect_location">定位錯誤</string>
+    <string name="start_navigation">開始導航</string>
+
+    <!-- Added missing strings -->
+    <string name="current_location_label">當前位置：</string>
+    <string name="home_page">已回到首頁</string>
+    <string name="taipei_info">台北地下街資訊</string>
+    <string name="account_logout_confirm">您確定要登出嗎？</string>
+    <string name="account_logout_success">已成功登出</string>
+    <string name="group_invitation_title">群組邀請</string>
+    <string name="group_invitation_message">您已被邀請加入群組：%1$s</string>
+    <string name="accept_invitation_success">已接受群組邀請：%1$s</string>
+    <string name="reject_invitation_success">已拒絕群組邀請：%1$s</string>
+    <string name="new_group_notification_title">新群組邀請</string>
+    <string name="new_group_notification_message">您收到來自群組 %1$s 的邀請</string>
+
+    <string name="init_failed">應用程式初始化失敗，請聯繫開發者</string>
+    <string name="navigation_setup_failed">導航設置失敗</string>
+    <string name="database_init_failed">資料庫初始化失敗</string>
+    <string name="map_load_failed">無法加載匹配的地圖圖片</string>
+    <string name="location_updated">位置已更新為：%1$s</string>
+    <string name="location_not_selected">未選擇位置</string>
+    <string name="operation_cancelled">操作取消或失敗</string>
+    <string name="camera_permission_required">需要相機和儲存權限才能使用拍照功能</string>
+    <string name="notification_permission_granted">通知權限已授予</string>
+
+
+    <string name="picture">圖片</string>
+    <string name="camera">相機</string>
+
+
+    <string name="navigation_home">首頁</string>
+    <string name="navigation_chat">聊天室</string>
+    <string name="navigation_member">會員資訊</string>
+    <string name="navigation_info">北車資訊</string>
+    <string name="navigation_settings">設定</string>
+
+    <string name="profile_image">頭像</string>
+    <string name="change_profile">更改頭像</string>
+    <string name="username_hint">輸入姓名</string>
+    <string name="user_id_label">帳號: [User ID]</string>
+    <string name="logout">登出</string>
+    <string name="switch_account">登入其他帳號</string>
+    <string name="login">登入</string>
+
+
+    <string name="guide_next">下一步</string>
+    <string name="guide_finish">完成</string>
+    <string name="do_not_show_again">不再顯示</string>
+    <string name="guide_image_description">使用說明圖片</string>
 
 </resources>

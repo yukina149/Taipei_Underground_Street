@@ -1,0 +1,280 @@
+<androidx.drawerlayout.widget.DrawerLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawer_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    tools:context=".UploadImage"
+    tools:openDrawer="start">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <RelativeLayout
+                android:id="@+id/main_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/white"
+                tools:android="true">
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingBottom="80dp">
+
+                    <!-- 長方形，位於最上方，寬度與螢幕相同 -->
+                    <View
+                        android:id="@+id/rectangle"
+                        android:layout_width="0dp"
+                        android:layout_height="75dp"
+                        android:background="@drawable/rectangle_background"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <!-- 應用名稱圖標 -->
+                    <ImageView
+                        android:id="@+id/app_name"
+                        android:layout_width="303dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginEnd="12dp"
+                        android:layout_marginBottom="12dp"
+                        android:contentDescription="App logo"
+                        android:src="@drawable/logoin_unlost"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="@id/rectangle" />
+
+
+                    <!-- 當前位置（原 currentLocationTextView） -->
+                    <TextView
+                        android:id="@+id/currentLocation"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginEnd="10dp"
+                        android:gravity="start"
+                        android:text="透過照片來比對現在的位置"
+                        android:textColor="#FF000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/rectangle" />
+
+                    <!-- 偵測結果（原 currentLocation） -->
+                    <TextView
+                        android:id="@+id/currentLocationTextView"
+                        android:layout_width="227dp"
+                        android:layout_height="53dp"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="#F9F9F9"
+                        android:gravity="start|center_vertical"
+                        android:text="偵測結果："
+                        android:textColor="#FF000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toStartOf="@id/sendtochat"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/currentLocation" />
+
+
+                    <!-- 指引線，位於螢幕寬度中間 -->
+                    <Button
+                        android:id="@+id/sendtochat"
+                        android:layout_width="150dp"
+                        android:layout_height="60dp"
+                        android:layout_marginEnd="10dp"
+                        android:backgroundTint="@color/mainbutton"
+                        android:text="分享位置"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toTopOf="@id/currentLocationTextView" />
+
+                    <androidx.constraintlayout.widget.Guideline
+                        android:id="@+id/guideline"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        app:layout_constraintGuide_percent="0.5" />
+
+                    <!-- 大地圖 -->
+                    <ImageView
+                        android:id="@+id/bigmap"
+                        android:layout_width="200dp"
+                        android:layout_height="200dp"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginEnd="5dp"
+                        android:src="@drawable/ic_bigmap"
+                        app:layout_constraintEnd_toStartOf="@id/guideline"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/currentLocationTextView" />
+
+                    <!-- 您上傳的照片 -->
+                    <TextView
+                        android:id="@+id/uploadtext"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginEnd="10dp"
+                        android:gravity="center"
+                        android:text="您上傳的照片"
+                        android:textColor="#FF000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="@id/bigmap"
+                        app:layout_constraintStart_toStartOf="@id/bigmap"
+                        app:layout_constraintTop_toBottomOf="@id/bigmap" />
+
+                    <!-- 按鈕：上傳圖片 -->
+                    <Button
+                        android:id="@+id/buttonupload"
+                        android:layout_width="150dp"
+                        android:layout_height="60dp"
+                        android:layout_marginTop="16dp"
+                        android:text="重新上傳"
+                        android:backgroundTint="@color/mainbutton"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="@id/bigmap"
+                        app:layout_constraintStart_toStartOf="@id/bigmap"
+                        app:layout_constraintTop_toBottomOf="@id/uploadtext" />
+
+
+
+                    <!-- 小地圖 -->
+                    <ImageView
+                        android:id="@+id/smallmap"
+                        android:layout_width="200dp"
+                        android:layout_height="200dp"
+                        android:layout_marginStart="5dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginEnd="10dp"
+                        android:src="@drawable/ic_bigmap"
+                        app:layout_constraintStart_toEndOf="@id/guideline"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/currentLocationTextView" />
+
+                    <!-- 系統回傳照片 -->
+                    <TextView
+                        android:id="@+id/errortext"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginEnd="10dp"
+                        android:gravity="center"
+                        android:text="系統回傳照片"
+                        android:textColor="#FF000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="@id/smallmap"
+                        app:layout_constraintStart_toStartOf="@id/smallmap"
+                        app:layout_constraintTop_toBottomOf="@id/smallmap" />
+
+                    <!-- 按鈕：定位錯誤 -->
+                    <Button
+                        android:id="@+id/buttonIncorrectLocation"
+                        android:layout_width="150dp"
+                        android:layout_height="60dp"
+                        android:layout_marginTop="16dp"
+                        android:backgroundTint="@color/mainbutton"
+                        android:enabled="false"
+                        android:text="@string/incorrect_location"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="@id/smallmap"
+                        app:layout_constraintStart_toStartOf="@id/smallmap"
+                        app:layout_constraintTop_toBottomOf="@id/errortext" />
+
+                    <!-- AR導航文字 -->
+                    <TextView
+                        android:id="@+id/artext"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginTop="16dp"
+                        android:gravity="start"
+                        android:text="AR導航"
+                        android:textColor="#FF000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/buttonIncorrectLocation" />
+
+                    <!-- AR地圖 -->
+                    <ImageView
+                        android:id="@+id/armap"
+                        android:layout_width="0dp"
+                        android:layout_height="200dp"
+                        android:layout_marginTop="16dp"
+                        android:src="@drawable/taipeiimage"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/artext" />
+
+                    <!-- 開始導航按鈕 -->
+                    <Button
+                        android:id="@+id/buttonCorrectLocation"
+                        android:layout_width="250dp"
+                        android:layout_height="60dp"
+                        android:layout_marginStart="99dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginEnd="99dp"
+                        android:backgroundTint="@color/mainbutton"
+                        android:enabled="false"
+                        android:text="進入AR導航"
+                        android:textColor="#000000"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/armap" />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+            </RelativeLayout>
+        </ScrollView>
+
+        <!-- 底部導航欄 -->
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_navigation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            app:menu="@menu/bottom_nav_menu"
+            app:itemIconSize="40dp"
+            app:itemIconTint="@color/my_forth"
+            app:itemTextColor="@color/my_forth"
+            android:background="@color/barcolor"
+            app:labelVisibilityMode="labeled" />
+    </LinearLayout>
+
+    <!-- 導航抽屜 -->
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/nav_view"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        app:headerLayout="@layout/activity_menu_header"
+        app:menu="@menu/menu_main" />
+</androidx.drawerlayout.widget.DrawerLayout>

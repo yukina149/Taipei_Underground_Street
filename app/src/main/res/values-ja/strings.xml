@@ -1,0 +1,81 @@
+<resources>
+    <string name="app_name">Unlost</string>
+
+    <string name="navigation_drawer_open">ナビゲーションドロワーを開く</string>
+    <string name="navigation_drawer_close">ナビゲーションドロワーを閉じる</string>
+    <string name="taipei">台北地下街ナビゲーション</string>
+    <string name="uploaded_image_desc">アップロードされた画像</string>
+    <string name="database_image_desc">データベース一致画像</string>
+    <string name="location_unknown">位置情報：不明</string>
+    <string name="upload_image">画像をアップロード</string>
+    <string name="appbar_scrolling_view_behavior">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
+
+    <string name="game_view_content_description">ゲームビュー</string>
+
+    <string name="open">開く</string>
+    <string name="close">閉じる</string>
+
+    <string name="guest">ゲスト</string>
+
+    <string name="language_setting">言語設定</string>
+    <string name="user_guide">使用説明</string>
+    <string name="delete_account">アカウント削除</string>
+    <string name="language_english">英語</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_chinese">中国語</string>
+
+    <string name="user_guide_content">こちらは使用説明の内容です。必要に応じて修正してください。</string>
+    <string name="delete_account_confirm">アカウントを削除してもよろしいですか？この操作は元に戻せません。</string>
+    <string name="delete">削除</string>
+    <string name="account_deleted">アカウントが正常に削除されました。</string>
+    <string name="user_info_not_found">ユーザー情報が見つかりません。</string>
+    <string name="confirm_language_change">言語変更の確認</string>
+    <string name="confirm_language_message">%1$s に言語を変更してもよろしいですか？</string>
+    <string name="language_change_cancelled">言語変更はキャンセルされました。</string>
+
+    <string name="incorrect_location">位置情報エラー</string>
+    <string name="start_navigation">ナビゲーション開始</string>
+
+    <!-- Added missing strings -->
+    <string name="current_location_label">現在の位置：</string>
+    <string name="home_page">ホームページに戻りました</string>
+    <string name="taipei_info">台北地下街情報</string>
+    <string name="account_logout_confirm">ログアウトしてもよろしいですか？</string>
+    <string name="account_logout_success">ログアウトに成功しました</string>
+    <string name="group_invitation_title">グループ招待</string>
+    <string name="group_invitation_message">グループ %1$s に招待されました</string>
+    <string name="accept_invitation_success">%1$s グループの招待を承諾しました</string>
+    <string name="reject_invitation_success">%1$s グループの招待を拒否しました</string>
+    <string name="new_group_notification_title">新しいグループ招待</string>
+    <string name="new_group_notification_message">グループ %1$s から招待を受け取りました</string>
+
+    <string name="init_failed">アプリケーションの初期化に失敗しました。開発者に連絡してください</string>
+    <string name="navigation_setup_failed">ナビゲーション設定に失敗しました</string>
+    <string name="database_init_failed">データベースの初期化に失敗しました</string>
+    <string name="map_load_failed">一致するマップ画像を読み込めませんでした</string>
+    <string name="location_updated">位置が更新されました：%1$s</string>
+    <string name="location_not_selected">位置が選択されていません</string>
+    <string name="operation_cancelled">操作がキャンセルまたは失敗しました</string>
+    <string name="camera_permission_required">カメラ機能を使用するにはカメラとストレージの権限が必要です</string>
+    <string name="notification_permission_granted">通知権限が付与されました</string>
+    <string name="notification_permission_required">グループ招待通知を受信するには通知権限が必要です</string>
+
+    <string name="picture">ピクチャー</string>
+    <string name="camera">カメラ</string>
+
+    <string name="navigation_home">ホーム</string>
+    <string name="navigation_chat">チャットルーム</string>
+    <string name="navigation_member">メンバー情報</string>
+    <string name="navigation_info">台北駅地下街情報</string>
+    <string name="navigation_settings">設定</string>
+
+    <string name="profile_image">プロフィール画像</string>
+    <string name="change_profile">プロフィール画像を変更</string>
+    <string name="username_hint">名前を入力してください</string>
+    <string name="user_id_label">アカウント: [User ID]</string>
+    <string name="logout">ログアウト</string>
+    <string name="switch_account">別のアカウントでログイン</string>
+    <string name="login">ログイン</string>
+
+
+</resources>
