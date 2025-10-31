@@ -301,8 +301,8 @@ public class FareQueryViewModel extends AndroidViewModel { // *** 改為 Android
 
         if (foundEntry != null) {
             _fullFareResult.setValue("全票票價：NT$ " + foundEntry.getFullFare());
-            _concessionFareResult.setValue("敬老愛心/兒童(新北)：NT$ " + foundEntry.getConcessionFare());
-            _taipeiChildFareResult.setValue("兒童(北市)：NT$ " + foundEntry.getTaipeiChildFare());
+            _concessionFareResult.setValue("敬老愛心/兒童：NT$ " + foundEntry.getConcessionFare());
+            //廢棄 _taipeiChildFareResult.setValue("兒童(北市)：NT$ " + foundEntry.getTaipeiChildFare());
             String distanceStr = foundEntry.getDistance();
             try {
                 if (distanceStr != null && !distanceStr.trim().isEmpty()) {

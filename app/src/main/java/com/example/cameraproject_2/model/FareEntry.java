@@ -29,13 +29,16 @@ public class FareEntry {
     @SerializedName("全票票價")
     private String fullFare;
 
+    //更改此欄位名稱
     @ColumnInfo(name = "concession_fare")
-    @SerializedName("敬老卡愛心卡愛心陪伴卡及新北市兒童優惠票價")
+    @SerializedName("敬老卡愛心卡愛心陪伴卡及臺北市與新北市兒童")
     private String concessionFare;
 
-    @ColumnInfo(name = "taipei_child_fare")
-    @SerializedName("臺北市兒童優惠票價")
-    private String taipeiChildFare;
+    //被政府改掉了 沒這個欄位
+   // @ColumnInfo(name = "taipei_child_fare")
+    //@SerializedName("臺北市兒童優惠票價")
+    //private String taipeiChildFare;
+
 
     @ColumnInfo(name = "distance")
     @SerializedName("距離")
@@ -55,8 +58,9 @@ public class FareEntry {
     public void setFullFare(String fullFare) { this.fullFare = fullFare; }
     public String getConcessionFare() { return concessionFare; }
     public void setConcessionFare(String concessionFare) { this.concessionFare = concessionFare; }
-    public String getTaipeiChildFare() { return taipeiChildFare; }
-    public void setTaipeiChildFare(String taipeiChildFare) { this.taipeiChildFare = taipeiChildFare; }
+    //用不到的欄位
+    // public String getTaipeiChildFare() { return taipeiChildFare; }
+    //public void setTaipeiChildFare(String taipeiChildFare) { this.taipeiChildFare = taipeiChildFare; }
     public String getDistance() { return distance; }
     public void setDistance(String distance) { this.distance = distance; }
 }

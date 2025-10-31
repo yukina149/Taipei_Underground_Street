@@ -19,7 +19,4 @@ public interface FareEntryDao {
     @Query("DELETE FROM fare_entries")
     void deleteAll(); // 這個方法需要在後台執行緒呼叫
 
-    // 你可以添加其他查詢方法，例如：
-    // @Query("SELECT * FROM fare_entries WHERE from_station = :from AND to_station = :to LIMIT 1")
-    // FareEntry findFare(String from, String to);
 }

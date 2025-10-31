@@ -6,7 +6,9 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import com.example.cameraproject_2.model.FareEntryDao;
 import com.example.cameraproject_2.model.FareEntry;
-@Database(entities = {FareEntry.class}, version = 1, exportSchema = false)
+
+//資料庫改成版本二
+@Database(entities = {FareEntry.class}, version = 2, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
     public abstract FareEntryDao fareEntryDao();
@@ -19,8 +21,8 @@ public abstract class AppDatabase extends RoomDatabase {
                 if (INSTANCE == null) {
                     INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
                                     AppDatabase.class, "metro_fare_database")
-                            // 如果發生 schema 變化且沒有提供遷移策略，允許破壞性遷移 (開發用)
-                            // .fallbackToDestructiveMigration()
+
+                           // .fallbackToDestructiveMigration() 這是開發重建資料庫用的函數 穩定後用不到
                             .build();
                 }
             }
